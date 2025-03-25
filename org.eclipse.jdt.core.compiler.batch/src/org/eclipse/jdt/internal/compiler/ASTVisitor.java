@@ -115,9 +115,6 @@ public abstract class ASTVisitor {
 	public void endVisit(Clinit clinit, ClassScope scope) {
 		// do nothing by default
 	}
-	public void endVisit(CompactConstructorDeclaration ccd, ClassScope scope) {
-		// do nothing by default
-	}
 	public void endVisit(ConnectCompoundAssignment compoundAssignment, BlockScope scope) {
 		// do nothing by default
 	}
@@ -627,9 +624,6 @@ public abstract class ASTVisitor {
 	}
 	public boolean visit(ModuleDeclaration module, CompilationUnitScope scope) {
 		return true;
-	}
-	public boolean visit(CompactConstructorDeclaration ccd, ClassScope scope) {
-		return true; // do nothing by default, keep traversing
 	}
 	public boolean visit(
 		CompilationUnitDeclaration compilationUnitDeclaration,
