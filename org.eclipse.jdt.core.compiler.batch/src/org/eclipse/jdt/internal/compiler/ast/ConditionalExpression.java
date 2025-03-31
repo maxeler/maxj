@@ -893,11 +893,6 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 
 	@Override
 	public boolean isCompatibleWith(TypeBinding left, Scope scope) {
-		if (this.appropriateMethodForOverload != null) {
-			// true/false path logic is irrelevant for overloaded ternary if, as both branches
-			// get entered in any case
-			return super.isCompatibleWith(left, scope);
-		}
 		if (!isPolyExpression())
 			return super.isCompatibleWith(left, scope);
 
