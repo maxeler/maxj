@@ -479,8 +479,11 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 	public TypeBinding resolveType(BlockScope scope) {
 		// JLS3 15.25
 
-		MethodBinding mb2 = this.getMethodBindingForOverload(scope);
-//		boolean allow = this.checkOverloadBinding(this.condition.resolvedType);
+		MethodBinding mb2 = null;
+		// These fields are only set on non-overloadable operators, and if we try to resolve without them, things break
+		if (this.condition.bindingsWhenTrue() == NO_VARIABLES && this.condition.bindingsWhenFalse() == NO_VARIABLES) {
+			mb2 = this.getMethodBindingForOverload(scope);
+		}
 		if ((mb2 != null) && (mb2.isValidBinding())) {
 			this.constant = Constant.NotAConstant;
 			this.resolvedType = mb2.returnType;
@@ -492,52 +495,6 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 			this.valueIfTrue.computeConversion(scope, mb2.parameters[0], this.valueIfTrue.resolvedType);
 			this.valueIfFalse.computeConversion(scope, mb2.parameters[1], this.valueIfFalse.resolvedType);
 			return mb2.returnType;
-		} else { // enforce BOOLEAN
-
-			TypeBinding expectedTypeLocal = TypeBinding.BOOLEAN;
-			this.condition.setExpectedType(expectedTypeLocal); // needed in case of generic method invocation
-			TypeBinding expressionType = this.condition.resolvedType;
-			if(expressionType == null)
-				expressionType = this.condition.resolveType(scope);
-			if (expressionType == null) {
-				scope.problemReporter().typeMismatchError(TypeBinding.VOID, expectedTypeLocal, this, null);
-				return null;
-			}
-
-			if (TypeBinding.notEquals(expressionType, expectedTypeLocal)) {
-
-				if (!expressionType.isCompatibleWith(expectedTypeLocal)) {
-					if (scope.isBoxingCompatibleWith(expressionType, expectedTypeLocal)) {
-						this.condition.computeConversion(scope, expectedTypeLocal, expressionType);
-					} else {
-						if (mb2 != null) {
-							scope.problemReporter().abortDueToInternalError("Type " + this.condition.resolvedType.debugName() +  //$NON-NLS-1$
-									" needs to implement a method called ternaryIf with argument types (" + this.valueIfTrue.resolvedType.debugName()  //$NON-NLS-1$
-									+ "," + this.valueIfFalse.resolvedType.debugName() + ")", this); //$NON-NLS-1$ //$NON-NLS-2$
-							return null;
-						}
-
-						scope.problemReporter().typeMismatchError(expressionType, expectedTypeLocal, this, null);
-						return null;
-					}
-				}
-			}
-		}
-
-		/*
-		 * Using == or != for object is error. Print warning if "Expr eq(Expr expre){}" exist.
-		 */
-
-		//conditions is EqualExpression
-		//exist eq function
-		if(this.condition instanceof EqualExpression
-			&& !((EqualExpression) this.condition).right.isThis() //without warning if statement is a == this
-			&& !(((EqualExpression) this.condition).right instanceof NullLiteral) //without warning if statement is a == null
-			){
-			MethodBinding eqMethod = existEqFunction(scope,(EqualExpression)this.condition);
-			//print warning
-			if(eqMethod != null && eqMethod.isValidBinding())
-				scope.problemReporter().wrongTernaryIfEqualityExpression((EqualExpression)this.condition, eqMethod);
 		}
 
 		LookupEnvironment env = scope.environment();
@@ -552,16 +509,37 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 			this.constant = Constant.NotAConstant;
 			// some types of nodes crash if you try to resolve them twice...
 			// (known case: QualifiedNameReference corrupts its own bits field on successful resolution)
-			TypeBinding conditionType = this.condition.resolvedType;
-			//TypeBinding conditionType = this.condition.resolveTypeExpecting(scope, TypeBinding.BOOLEAN);
-			this.condition.computeConversion(scope, TypeBinding.BOOLEAN, conditionType);
+			TypeBinding conditionType = this.condition.resolvedType == null ?
+					this.condition.resolveTypeExpecting(scope, TypeBinding.BOOLEAN) : this.condition.resolvedType;
+			// we might still get here if condition is not a boolean but does not implement the overload
+			if (conditionType != null
+					&& TypeBinding.notEquals(conditionType, TypeBinding.BOOLEAN)
+					&& !conditionType.isCompatibleWith(TypeBinding.BOOLEAN)) {
+				if (scope.isBoxingCompatibleWith(conditionType, TypeBinding.BOOLEAN)) {
+					// vanilla code path
+					this.condition.computeConversion(scope, TypeBinding.BOOLEAN, conditionType);
+				} else {
+					if (mb2 != null) {
+						scope.problemReporter().invalidOrMissingOverloadedOperator(this, getMethodName(),
+								this.valueIfTrue.resolvedType, this.valueIfFalse.resolvedType);
+						return null;
+					}
+				}
+			}
+			// Warn user if this smells like a mistaken use of == instead of ===
+			if(this.condition instanceof EqualExpression
+					&& !((EqualExpression) this.condition).right.isThis()
+					&& !(((EqualExpression) this.condition).right instanceof NullLiteral)) {
+				MethodBinding eqMethod = existEqFunction(scope,(EqualExpression)this.condition);
+				if (eqMethod != null && eqMethod.isValidBinding()) {
+					scope.problemReporter().wrongTernaryIfEqualityExpression((EqualExpression)this.condition, eqMethod);
+				}
+			}
 
 			if (this.valueIfTrue instanceof CastExpression) this.valueIfTrue.bits |= DisableUnnecessaryCastCheck; // will check later on
-			this.originalValueIfTrueType = this.valueIfTrue.resolvedType;
-			//this.originalValueIfTrueType = this.valueIfTrue.resolveTypeWithBindings(this.condition.bindingsWhenTrue(), scope);
+			this.originalValueIfTrueType = this.valueIfTrue.resolveTypeWithBindings(this.condition.bindingsWhenTrue(), scope);
 			if (this.valueIfFalse instanceof CastExpression) this.valueIfFalse.bits |= DisableUnnecessaryCastCheck; // will check later on
-			this.originalValueIfFalseType = this.valueIfFalse.resolvedType;
-			//this.originalValueIfFalseType = this.valueIfFalse.resolveTypeWithBindings(this.condition.bindingsWhenFalse(), scope);
+			this.originalValueIfFalseType = this.valueIfFalse.resolveTypeWithBindings(this.condition.bindingsWhenFalse(), scope);
 
 			/*
 			 *
@@ -951,6 +929,9 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 
 	public MethodBinding getMethodBindingForOverload(BlockScope scope) {
 		final TypeBinding tb_cond = this.condition.resolvedType == null ? this.condition.resolveType(scope) : this.condition.resolvedType;
+		if (tb_cond == null || !tb_cond.isValidBinding() || tb_cond.isPrimitiveOrBoxedPrimitiveType()) {
+			return null;
+		}
 		this.originalValueIfFalseType = this.valueIfFalse.resolvedType == null ? this.valueIfFalse.resolveType(scope) : this.valueIfFalse.resolvedType;
 		this.originalValueIfTrueType = this.valueIfTrue.resolvedType == null ? this.valueIfTrue.resolveType(scope) : this.valueIfTrue.resolvedType;
 		final Expression [] arguments = new Expression[] { this.valueIfTrue, this.valueIfFalse };

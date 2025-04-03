@@ -4910,7 +4910,7 @@ public void invalidOrMissingOverloadedOperator(Reference reference, String refer
 			reference.sourceEnd);
 }
 
-public void invalidOrMissingOverloadedOperator(Reference reference, String referenceString, TypeBinding boundOne, TypeBinding boundTwo) {
+public void invalidOrMissingOverloadedOperator(Expression expression, String referenceString, TypeBinding boundOne, TypeBinding boundTwo) {
 	String boundOneName = new String(boundOne.readableName());
 	String boundOneShortName = new String(boundOne.shortReadableName());
 	String boundTwoName = new String(boundTwo.readableName());
@@ -4925,8 +4925,8 @@ public void invalidOrMissingOverloadedOperator(Reference reference, String refer
 					referenceString,
 					boundOneShortName,
 					boundTwoShortName},
-			reference.sourceStart,
-			reference.sourceEnd);
+			expression.sourceStart,
+			expression.sourceEnd);
 }
 
 public void overloadedOperatorMethodNotStatic(Assignment assignment, String assignmentType) {
