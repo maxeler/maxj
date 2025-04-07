@@ -38,20 +38,13 @@ import static org.eclipse.jdt.internal.compiler.ast.ExpressionContext.VANILLA_CO
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.codegen.BranchLabel;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
+import org.eclipse.jdt.internal.compiler.codegen.Opcodes;
 import org.eclipse.jdt.internal.compiler.flow.FlowContext;
 import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
 import org.eclipse.jdt.internal.compiler.flow.UnconditionalFlowInfo;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.impl.Constant;
-import org.eclipse.jdt.internal.compiler.lookup.BaseTypeBinding;
-import org.eclipse.jdt.internal.compiler.lookup.Binding;
-import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
-import org.eclipse.jdt.internal.compiler.lookup.LookupEnvironment;
-import org.eclipse.jdt.internal.compiler.lookup.MethodBinding;
-import org.eclipse.jdt.internal.compiler.lookup.PolyTypeBinding;
-import org.eclipse.jdt.internal.compiler.lookup.Scope;
-import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
-import org.eclipse.jdt.internal.compiler.lookup.TypeIds;
+import org.eclipse.jdt.internal.compiler.lookup.*;
 
 public class ConditionalExpression extends OperatorExpression implements IPolyExpression {
 
@@ -59,6 +52,8 @@ public class ConditionalExpression extends OperatorExpression implements IPolyEx
 	public Constant optimizedBooleanConstant;
 	public Constant optimizedIfTrueConstant;
 	public Constant optimizedIfFalseConstant;
+	public MethodBinding appropriateMethodForOverload = null;
+	public MethodBinding syntheticAccessor = null;
 
 	// for local variables table attributes
 	int trueInitStateIndex = -1;
@@ -87,6 +82,15 @@ public class ConditionalExpression extends OperatorExpression implements IPolyEx
 public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 			FlowInfo flowInfo) {
 		int initialComplaintLevel = (flowInfo.reachMode() & FlowInfo.UNREACHABLE) != 0 ? Statement.COMPLAINED_FAKE_REACHABLE : Statement.NOT_COMPLAINED;
+
+		if (this.appropriateMethodForOverload != null) {
+			MethodBinding original = this.appropriateMethodForOverload.original();
+			if (original.isPrivate()) {
+				this.syntheticAccessor = ((SourceTypeBinding) original.declaringClass).addSyntheticMethod(original, false);
+				currentScope.problemReporter().needToEmulateMethodAccess(original, this);
+			}
+		}
+
 		Constant cst = this.condition.optimizedBooleanConstant();
 		boolean isConditionOptimizedTrue = cst != Constant.NotAConstant && cst.booleanValue() == true;
 		boolean isConditionOptimizedFalse = cst != Constant.NotAConstant && cst.booleanValue() == false;
@@ -270,6 +274,11 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 		BlockScope currentScope,
 		CodeStream codeStream,
 		boolean valueRequired) {
+
+		if (this.appropriateMethodForOverload != null && this.appropriateMethodForOverload.isValidBinding()) {
+			this.generateOperatorOverloadCode(currentScope, codeStream, valueRequired);
+			return;
+		}
 
 		int pc = codeStream.position;
 		BranchLabel endifLabel, falseLabel;
@@ -469,6 +478,25 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 	@Override
 	public TypeBinding resolveType(BlockScope scope) {
 		// JLS3 15.25
+
+		MethodBinding mb2 = null;
+		// These fields are only set on non-overloadable operators, and if we try to resolve without them, things break
+		if (this.condition.bindingsWhenTrue() == NO_VARIABLES && this.condition.bindingsWhenFalse() == NO_VARIABLES) {
+			mb2 = this.getMethodBindingForOverload(scope);
+		}
+		if ((mb2 != null) && (mb2.isValidBinding())) {
+			this.constant = Constant.NotAConstant;
+			this.resolvedType = mb2.returnType;
+			this.appropriateMethodForOverload = mb2;
+			if (isMethodUseDeprecated(this.appropriateMethodForOverload, scope, true, new InvocationSite.EmptyWithAstNode(this)))
+				scope.problemReporter().deprecatedMethod(this.appropriateMethodForOverload, this);
+			this.setExpectedType(this.resolvedType);
+			this.condition.computeConversion(scope, this.condition.resolvedType, this.condition.resolvedType);
+			this.valueIfTrue.computeConversion(scope, mb2.parameters[0], this.valueIfTrue.resolvedType);
+			this.valueIfFalse.computeConversion(scope, mb2.parameters[1], this.valueIfFalse.resolvedType);
+			return mb2.returnType;
+		}
+
 		LookupEnvironment env = scope.environment();
 		if (this.expressionContext == ASSIGNMENT_CONTEXT || this.expressionContext == INVOCATION_CONTEXT) {
 			this.valueIfTrue.setExpressionContext(this.expressionContext);
@@ -479,8 +507,34 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 
 		if (this.constant != Constant.NotAConstant) {
 			this.constant = Constant.NotAConstant;
-			TypeBinding conditionType = this.condition.resolveTypeExpecting(scope, TypeBinding.BOOLEAN);
-			this.condition.computeConversion(scope, TypeBinding.BOOLEAN, conditionType);
+			// some types of nodes crash if you try to resolve them twice...
+			// (known case: QualifiedNameReference corrupts its own bits field on successful resolution)
+			TypeBinding conditionType = this.condition.resolvedType == null ?
+					this.condition.resolveTypeExpecting(scope, TypeBinding.BOOLEAN) : this.condition.resolvedType;
+			// we might still get here if condition is not a boolean but does not implement the overload
+			if (conditionType != null
+					&& TypeBinding.notEquals(conditionType, TypeBinding.BOOLEAN)
+					&& !conditionType.isCompatibleWith(TypeBinding.BOOLEAN)) {
+				if (scope.isBoxingCompatibleWith(conditionType, TypeBinding.BOOLEAN)) {
+					// vanilla code path
+					this.condition.computeConversion(scope, TypeBinding.BOOLEAN, conditionType);
+				} else {
+					if (mb2 != null) {
+						scope.problemReporter().invalidOrMissingOverloadedOperator(this, getMethodName(),
+								this.valueIfTrue.resolvedType, this.valueIfFalse.resolvedType);
+						return null;
+					}
+				}
+			}
+			// Warn user if this smells like a mistaken use of == instead of ===
+			if(this.condition instanceof EqualExpression
+					&& !((EqualExpression) this.condition).right.isThis()
+					&& !(((EqualExpression) this.condition).right instanceof NullLiteral)) {
+				MethodBinding eqMethod = existEqFunction(scope,(EqualExpression)this.condition);
+				if (eqMethod != null && eqMethod.isValidBinding()) {
+					scope.problemReporter().wrongTernaryIfEqualityExpression((EqualExpression)this.condition, eqMethod);
+				}
+			}
 
 			if (this.valueIfTrue instanceof CastExpression) this.valueIfTrue.bits |= DisableUnnecessaryCastCheck; // will check later on
 			this.originalValueIfTrueType = this.valueIfTrue.resolveTypeWithBindings(this.condition.bindingsWhenTrue(), scope);
@@ -788,6 +842,10 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 
 	@Override
 	public boolean isPolyExpression() throws UnsupportedOperationException {
+		if (this.appropriateMethodForOverload != null) {
+			// overloaded operators cannot be poly
+			return false;
+		}
 
 		if (this.isPolyExpression)
 			return true;
@@ -863,6 +921,113 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 			this.valueIfFalse.traverse(visitor, scope);
 		}
 		visitor.endVisit(this, scope);
+	}
+
+	public String getMethodName() {
+		return "ternaryIf"; //$NON-NLS-1$
+	}
+
+	public MethodBinding getMethodBindingForOverload(BlockScope scope) {
+		final TypeBinding tb_cond = this.condition.resolvedType == null ? this.condition.resolveType(scope) : this.condition.resolvedType;
+		if (tb_cond == null || !tb_cond.isValidBinding() || tb_cond.isPrimitiveOrBoxedPrimitiveType()) {
+			return null;
+		}
+		this.originalValueIfFalseType = this.valueIfFalse.resolvedType == null ? this.valueIfFalse.resolveType(scope) : this.valueIfFalse.resolvedType;
+		this.originalValueIfTrueType = this.valueIfTrue.resolvedType == null ? this.valueIfTrue.resolveType(scope) : this.valueIfTrue.resolvedType;
+		final Expression [] arguments = new Expression[] { this.valueIfTrue, this.valueIfFalse };
+
+		Invocation fakeInvocationSite = new OperatorOverloadInvocationSite(){
+			@Override
+			public TypeBinding invocationTargetType() {
+				return ConditionalExpression.this.expectedType();
+			}
+			@Override
+			public ExpressionContext getExpressionContext() {
+				return ConditionalExpression.this.getExpressionContext();
+			}
+			@Override
+			public Expression[] arguments() {
+				return arguments;
+			}
+		};
+
+		String ms = getMethodName();
+
+		MethodBinding mb2 = null;
+		if (this.originalValueIfTrueType != null && this.originalValueIfFalseType != null) {
+			mb2 = scope.getMethod(tb_cond, ms.toCharArray(), new TypeBinding[]{this.originalValueIfTrueType, this.originalValueIfFalseType}, fakeInvocationSite);
+		}
+		return mb2;
+	}
+
+	private MethodBinding existEqFunction(BlockScope scope, EqualExpression localCondition) {
+		final TypeBinding tb_right = localCondition.right.resolvedType == null ? localCondition.right.resolveType(scope) : localCondition.right.resolvedType;
+		final TypeBinding tb_left = localCondition.left.resolvedType == null ? localCondition.left.resolveType(scope) : localCondition.left.resolvedType;
+		final TypeBinding[] tb_args = new TypeBinding[] { tb_right };
+		final Expression[] arguments = new Expression[] { localCondition.left, localCondition.right };
+
+		OperatorOverloadInvocationSite fakeInvocationSite = new OperatorOverloadInvocationSite() {
+			@Override
+			public TypeBinding invocationTargetType() {
+				return ConditionalExpression.this.expectedType();
+			}
+			@Override
+			public ExpressionContext getExpressionContext() {
+				return ConditionalExpression.this.getExpressionContext();
+			}
+			@Override
+			public Expression[] arguments() {
+				return arguments;
+			}
+		};
+
+		String ms = "eq"; //$NON-NLS-1$
+
+		MethodBinding mb2 = null;
+		if ((tb_left!=null) && (tb_right!=null) /*&& (tb_left.id == tb_right.id)*/) {
+			mb2 = scope.getMethod(tb_left, ms.toCharArray(), tb_args, fakeInvocationSite);
+			if (mb2 == null || !mb2.isValidBinding() || TypeBinding.notEquals(tb_left, mb2.returnType)) {
+				return null;
+			}
+			return mb2;
+
+		}
+		return null;
+	}
+
+
+	public void generateOperatorOverloadCode(BlockScope currentScope, CodeStream codeStream, boolean valueRequired) {
+		if(this.appropriateMethodForOverload != null){
+			this.condition.generateCode(currentScope, codeStream,true);
+			this.valueIfTrue.generateCode(currentScope, codeStream, true);
+			this.valueIfFalse.generateCode(currentScope, codeStream, true);
+			if (this.appropriateMethodForOverload.hasSubstitutedParameters() || this.appropriateMethodForOverload.hasSubstitutedReturnType()) {
+				TypeBinding tbo = this.appropriateMethodForOverload.returnType;
+				MethodBinding mb3 = this.appropriateMethodForOverload.original();
+				MethodBinding final_mb = mb3;
+				// TODO remove for real?
+				//final_mb.returnType = final_mb.returnType.erasure();
+				codeStream.invoke((final_mb.declaringClass.isInterface()) ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual, final_mb, final_mb.declaringClass.erasure());
+
+				if (tbo.erasure().isProvablyDistinct(final_mb.returnType.erasure())) {
+					codeStream.checkcast(tbo);
+				}
+			} else {
+				MethodBinding original = this.appropriateMethodForOverload.original();
+				if(original.isPrivate()){
+					codeStream.invoke(Opcodes.OPC_invokestatic, this.syntheticAccessor, null /* default declaringClass */);
+				}
+				else{
+					codeStream.invoke((original.declaringClass.isInterface()) ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual, original, original.declaringClass);
+				}
+				if (!this.appropriateMethodForOverload.returnType.isBaseType())
+					codeStream.checkcast(this.appropriateMethodForOverload.returnType);
+
+			}
+			if (valueRequired) {
+				codeStream.generateImplicitConversion(this.implicitConversion);
+			}
+		}
 	}
 }
 

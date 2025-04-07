@@ -1,21 +1,3 @@
-/*******************************************************************************
- * Copyright (c) 2000, 2015 IBM Corporation and others.
- *
- * This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License 2.0
- * which accompanies this distribution, and is available at
- * https://www.eclipse.org/legal/epl-2.0/
- *
- * SPDX-License-Identifier: EPL-2.0
- *
- * Contributors:
- *     IBM Corporation - initial API and implementation
- *     Stephan Herrmann - Contribution for
- *								bug 345305 - [compiler][null] Compiler misidentifies a case of "variable can only be null"
- *								bug 392862 - [1.8][compiler][null] Evaluate null annotations on array types
- *								bug 383368 - [compiler][null] syntactic null analysis for field references
- *								bug 403147 - [compiler][null] FUP of bug 400761: consolidate interaction between unboxing, NPE, and deferred checking
- *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
@@ -30,14 +12,19 @@ import org.eclipse.jdt.internal.compiler.lookup.InvocationSite;
 import org.eclipse.jdt.internal.compiler.lookup.MethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.OperatorOverloadInvocationSite;
 import org.eclipse.jdt.internal.compiler.lookup.SourceTypeBinding;
-import org.eclipse.jdt.internal.compiler.lookup.TagBits;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.TypeIds;
 
-public class ArrayReference extends Reference {
+/**
+ *
+ * @author milan
+ *
+ */
+public class CompositeArrayReference extends Reference {
 
 	public Expression receiver;
-	public Expression position;
+	public Expression positionOne;
+	public Expression positionTwo;
 	public MethodBinding appropriateMethodForOverload = null;
 	public MethodBinding compoundAppropriateMethodForOverload = null;
 	public TypeBinding expectedType = null; //Operator overload, for generic function call
@@ -49,9 +36,10 @@ public class ArrayReference extends Reference {
 		this.expectedType = expectedType;
 	}
 
-public ArrayReference(Expression rec, Expression pos) {
+public CompositeArrayReference(Expression rec, Expression pos1, Expression pos2) {
 	this.receiver = rec;
-	this.position = pos;
+	this.positionOne = pos1;
+	this.positionTwo = pos2;
 	this.sourceStart = rec.sourceStart;
 }
 
@@ -110,46 +98,29 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 	}
 	flowInfo = this.receiver.analyseCode(currentScope, flowContext, flowInfo);
 	this.receiver.checkNPE(currentScope, flowContext, flowInfo, 1);
-	flowInfo = this.position.analyseCode(currentScope, flowContext, flowInfo);
-	this.position.checkNPEbyUnboxing(currentScope, flowContext, flowInfo);
+	flowInfo = this.positionOne.analyseCode(currentScope, flowContext, flowInfo);
+	this.positionOne.checkNPEbyUnboxing(currentScope, flowContext, flowInfo);
 	// account for potential ArrayIndexOutOfBoundsException:
+	flowContext.recordAbruptExit();
+	flowInfo = this.positionTwo.analyseCode(currentScope, flowContext, flowInfo);
+	this.positionTwo.checkNPEbyUnboxing(currentScope, flowContext, flowInfo);
 	flowContext.recordAbruptExit();
 	return flowInfo;
 }
 
 @Override
-public boolean checkNPE(BlockScope scope, FlowContext flowContext, FlowInfo flowInfo, int ttlForFieldCheck) {
-	if ((this.resolvedType.tagBits & TagBits.AnnotationNullable) != 0) {
-		scope.problemReporter().arrayReferencePotentialNullReference(this);
-		return true;
-	} else {
-		return super.checkNPE(scope, flowContext, flowInfo, ttlForFieldCheck);
-	}
-}
-
-@Override
 public void generateAssignment(BlockScope currentScope, CodeStream codeStream, Assignment assignment, boolean valueRequired) {
-	if (this.appropriateMethodForOverload != null && this.appropriateMethodForOverload.isValidBinding()) {
-		if (this.appropriateMethodForOverload.isStatic()) {
-			currentScope.problemReporter().overloadedOperatorMethodNotStatic(this, "[] ="); //$NON-NLS-1$
+	MethodBinding mb2 = this.getMethodBindingForOverload(currentScope, new Expression[]{this.positionOne, this.positionTwo, assignment.expression}, true);
+	if (mb2 != null && mb2.isValidBinding()) {
+		if (mb2.isStatic()) {
+			currentScope.problemReporter().overloadedOperatorMethodNotStatic(this, "[:] ="); //$NON-NLS-1$
 			return;
 		}
 		this.generatePutCode(currentScope, codeStream, valueRequired, assignment);
 		return;
 	}
-	int pc = codeStream.position;
-	this.receiver.generateCode(currentScope, codeStream, true);
-	if (this.receiver instanceof CastExpression	// ((type[])null)[0]
-			&& ((CastExpression)this.receiver).innermostCastedExpression().resolvedType == TypeBinding.NULL){
-		codeStream.checkcast(this.receiver.resolvedType);
-	}
-	codeStream.recordPositionsFrom(pc, this.sourceStart);
-	this.position.generateCode(currentScope, codeStream, true);
-	assignment.expression.generateCode(currentScope, codeStream, true);
-	codeStream.arrayAtPut(this.resolvedType.id, valueRequired);
-	if (valueRequired) {
-		codeStream.generateImplicitConversion(assignment.implicitConversion);
-	}
+	currentScope.problemReporter().invalidOrMissingOverloadedOperator(this, "put", this.positionOne.resolvedType, this.positionTwo.resolvedType, assignment.expression.resolvedType); //$NON-NLS-1$
+	return;
 }
 
 /**
@@ -159,43 +130,19 @@ public void generateAssignment(BlockScope currentScope, CodeStream codeStream, A
 public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean valueRequired) {
 	if (this.appropriateMethodForOverload != null && this.appropriateMethodForOverload.isValidBinding()) {
 		if (this.appropriateMethodForOverload.isStatic()) {
-			currentScope.problemReporter().overloadedOperatorMethodNotStatic(this, "= []"); //$NON-NLS-1$
+			currentScope.problemReporter().overloadedOperatorMethodNotStatic(this, "= [:]"); //$NON-NLS-1$
 			return;
 		}
 		this.generateOperatorOverloadCode(currentScope, codeStream, valueRequired);
 		return;
 	}
-	int pc = codeStream.position;
-	this.receiver.generateCode(currentScope, codeStream, true);
-	if (this.receiver instanceof CastExpression	// ((type[])null)[0]
-			&& ((CastExpression)this.receiver).innermostCastedExpression().resolvedType == TypeBinding.NULL){
-		codeStream.checkcast(this.receiver.resolvedType);
-	}
-	this.position.generateCode(currentScope, codeStream, true);
-	codeStream.arrayAt(this.resolvedType.id);
-	// Generating code for the potential runtime type checking
-	if (valueRequired) {
-		codeStream.generateImplicitConversion(this.implicitConversion);
-	} else {
-		boolean isUnboxing = (this.implicitConversion & TypeIds.UNBOXING) != 0;
-		// conversion only generated if unboxing
-		if (isUnboxing) codeStream.generateImplicitConversion(this.implicitConversion);
-		switch (isUnboxing ? postConversionType(currentScope).id : this.resolvedType.id) {
-			case T_long :
-			case T_double :
-				codeStream.pop2();
-				break;
-			default :
-				codeStream.pop();
-		}
-	}
-	codeStream.recordPositionsFrom(pc, this.sourceStart);
+	currentScope.problemReporter().invalidOrMissingOverloadedOperator(this, "get", this.positionOne.resolvedType, this.positionTwo.resolvedType); //$NON-NLS-1$
+	return;
 }
 
 @Override
 public void generateCompoundAssignment(BlockScope currentScope, CodeStream codeStream, Expression expression, int operator, int assignmentImplicitConversion, boolean valueRequired) {
 	if (this.compoundAppropriateMethodForOverload != null) {
-		//this.generatePutCode(currentScope, this.appropriateMethodForOverload, this.syntheticAccessor, codeStream, valueRequired, null);
 		return;
 	}
 	this.receiver.generateCode(currentScope, codeStream, true);
@@ -203,7 +150,8 @@ public void generateCompoundAssignment(BlockScope currentScope, CodeStream codeS
 			&& ((CastExpression)this.receiver).innermostCastedExpression().resolvedType == TypeBinding.NULL){
 		codeStream.checkcast(this.receiver.resolvedType);
 	}
-	this.position.generateCode(currentScope, codeStream, true);
+	this.positionOne.generateCode(currentScope, codeStream, true);
+	this.positionTwo.generateCode(currentScope, codeStream, true);
 	codeStream.dup2();
 	codeStream.arrayAt(this.resolvedType.id);
 	int operationTypeID;
@@ -232,7 +180,7 @@ public void generateCompoundAssignment(BlockScope currentScope, CodeStream codeS
 
 @Override
 public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream, CompoundAssignment postIncrement, boolean valueRequired) {
-	MethodBinding mb2 = this.getMethodBindingForOverload(currentScope, new Expression [] {this.position}, false);
+	MethodBinding mb2 = this.getMethodBindingForOverload(currentScope, new Expression[]{this.positionOne, this.positionTwo}, false);
 	if (mb2.isValidBinding()) {
 		currentScope.problemReporter().abortDueToInternalError("Overloaded array reference post increment emulation is not implemented.", this); //$NON-NLS-1$
 		return;
@@ -242,7 +190,8 @@ public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream
 			&& ((CastExpression)this.receiver).innermostCastedExpression().resolvedType == TypeBinding.NULL){
 		codeStream.checkcast(this.receiver.resolvedType);
 	}
-	this.position.generateCode(currentScope, codeStream, true);
+	this.positionOne.generateCode(currentScope, codeStream, true);
+	this.positionTwo.generateCode(currentScope, codeStream, true);
 	codeStream.dup2();
 	codeStream.arrayAt(this.resolvedType.id);
 	if (valueRequired) {
@@ -269,7 +218,8 @@ public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream
 @Override
 public StringBuilder printExpression(int indent, StringBuilder output) {
 	this.receiver.printExpression(0, output).append('[');
-	return this.position.printExpression(0, output).append(']');
+	this.positionOne.printExpression(0, output).append(":"); //$NON-NLS-1$
+	return this.positionTwo.printExpression(0, output).append(']');
 }
 
 @Override
@@ -280,30 +230,47 @@ public TypeBinding resolveType(BlockScope scope) {
 		this.receiver.bits |= ASTNode.DisableUnnecessaryCastCheck; // will check later on
 	}
 	// test
-	MethodBinding overloadMethod = this.getMethodBindingForOverload(scope, new Expression [] {this.position}, false);
+	MethodBinding overloadMethod = this.getMethodBindingForOverload(scope, new Expression[]{this.positionOne, this.positionTwo}, false);
 	if ((overloadMethod !=null) && (overloadMethod.isValidBinding())) {
 		this.appropriateMethodForOverload = overloadMethod;
 		if (isMethodUseDeprecated(this.appropriateMethodForOverload, scope, true, new InvocationSite.EmptyWithAstNode(this)))
 			scope.problemReporter().deprecatedMethod(this.appropriateMethodForOverload, this);
 		this.resolvedType = overloadMethod.returnType;
-		if(this.position.resolvedType == null)
-			this.position.resolveType(scope);
+		if(this.positionOne.resolvedType == null)
+			this.positionOne.resolveType(scope);
+		if(this.positionTwo.resolvedType == null)
+			this.positionTwo.resolveType(scope);
 		this.receiver.computeConversion(scope, this.receiver.resolvedType, this.receiver.resolvedType);
-		this.position.computeConversion(scope, overloadMethod.parameters[0], this.position.resolvedType);
+		this.positionOne.computeConversion(scope, overloadMethod.parameters[0], this.positionOne.resolvedType);
+		this.positionTwo.computeConversion(scope, overloadMethod.parameters[1], this.positionTwo.resolvedType);
 		this.setExpectedType(this.resolvedType);
 		return overloadMethod.returnType;
 	} else { // enforce INT
 		TypeBinding expectedTypeLocal = TypeBinding.INT;
-		this.position.setExpectedType(expectedTypeLocal); // needed in case of generic method invocation
-		TypeBinding expressionType = this.position.resolvedType;
-		if (expressionType == null) {
+		this.positionOne.setExpectedType(expectedTypeLocal); // needed in case of generic method invocation
+		TypeBinding expressionTypeOne = this.positionOne.resolvedType;
+		this.positionTwo.setExpectedType(expectedTypeLocal); // needed in case of generic method invocation
+		TypeBinding expressionTypeTwo = this.positionTwo.resolvedType;
+		if (expressionTypeOne == null) {
 			scope.problemReporter().typeMismatchError(TypeBinding.VOID, expectedTypeLocal, this, null);
 			return null;
 		}
-		if (TypeBinding.notEquals(expressionType, expectedTypeLocal)) {
-			if (!expressionType.isCompatibleWith(expectedTypeLocal)) {
-				if (!scope.isBoxingCompatibleWith(expressionType, expectedTypeLocal)) {
-					scope.problemReporter().typeMismatchError(expressionType, expectedTypeLocal, this, null);
+		if (expressionTypeTwo == null) {
+			scope.problemReporter().typeMismatchError(TypeBinding.VOID, expectedTypeLocal, this, null);
+			return null;
+		}
+		if (TypeBinding.notEquals(expressionTypeOne, expectedTypeLocal)) {
+			if (!expressionTypeOne.isCompatibleWith(expectedTypeLocal)) {
+				if (!scope.isBoxingCompatibleWith(expressionTypeOne, expectedTypeLocal)) {
+					scope.problemReporter().typeMismatchError(expressionTypeOne, expectedTypeLocal, this, null);
+					return null;
+				}
+			}
+		}
+		if (TypeBinding.notEquals(expressionTypeTwo, expectedTypeLocal)) {
+			if (!expressionTypeTwo.isCompatibleWith(expectedTypeLocal)) {
+				if (!scope.isBoxingCompatibleWith(expressionTypeTwo, expectedTypeLocal)) {
+					scope.problemReporter().typeMismatchError(expressionTypeTwo, expectedTypeLocal, this, null);
 					return null;
 				}
 			}
@@ -321,10 +288,16 @@ public TypeBinding resolveType(BlockScope scope) {
 			scope.problemReporter().referenceMustBeArrayTypeAt(arrayType, this);
 		}
 	}
-	TypeBinding positionType = this.position.resolvedType; //TypeExpecting(scope, TypeBinding.INT);
-	if (positionType != null) {
-		this.position.computeConversion(scope, TypeBinding.INT, positionType);
+	TypeBinding positionTypeOne = this.positionOne.resolvedType; //TypeExpecting(scope, TypeBinding.INT);
+	TypeBinding positionTypeTwo = this.positionTwo.resolvedType; //TypeExpecting(scope, TypeBinding.INT);
+
+	if (positionTypeOne != null) {
+		this.positionOne.computeConversion(scope, TypeBinding.INT, positionTypeOne);
 	}
+	if (positionTypeTwo != null) {
+		this.positionTwo.computeConversion(scope, TypeBinding.INT, positionTypeTwo);
+	}
+
 	return this.resolvedType;
 }
 
@@ -332,38 +305,25 @@ public TypeBinding resolveType(BlockScope scope) {
 public void traverse(ASTVisitor visitor, BlockScope scope) {
 	if (visitor.visit(this, scope)) {
 		this.receiver.traverse(visitor, scope);
-		this.position.traverse(visitor, scope);
+		this.positionOne.traverse(visitor, scope);
+		this.positionTwo.traverse(visitor, scope);
 	}
 	visitor.endVisit(this, scope);
 }
 
 @Override
 public int nullStatus(FlowInfo flowInfo, FlowContext flowContext) {
-	if (this.resolvedType != null && (this.resolvedType.tagBits & TagBits.AnnotationNullMASK) == 0L && this.resolvedType.isFreeTypeVariable()) {
-		return FlowInfo.FREE_TYPEVARIABLE;
-	}
-	return super.nullStatus(flowInfo, flowContext);
+	return FlowInfo.UNKNOWN;
 }
 
 @Override
 public void generatePreOverloadAssignment(BlockScope currentScope, CodeStream codeStream, boolean valueRequired) {
-	if(this.appropriateMethodForOverload != null)
-		return;
-	int pc = codeStream.position;
-	this.receiver.generateCode(currentScope, codeStream, true);
-	if (this.receiver instanceof CastExpression	// ((type[])null)[0]
-			&& ((CastExpression)this.receiver).innermostCastedExpression().resolvedType == TypeBinding.NULL){
-		codeStream.checkcast(this.receiver.resolvedType);
-	}
-	codeStream.recordPositionsFrom(pc, this.sourceStart);
-	this.position.generateCode(currentScope, codeStream, true);
+	 // this cannot be assigned
 }
 
 @Override
 public void generatePostOverloadAssignment(BlockScope currentScope, CodeStream codeStream, boolean valueRequired) {
-	if(this.appropriateMethodForOverload != null)
-		return;
-	codeStream.arrayAtPut(this.resolvedType.id, valueRequired);
+	 // this cannot be assigned
 }
 
 @Override
@@ -375,38 +335,35 @@ public TypeBinding resolveType(BlockScope scope, Expression expression) {
 	}catch(ClassCastException cce){
 		return resolveType(scope);
 	}
-	MethodBinding mb2 = this.getMethodBindingForOverload(scope, new Expression [] {this.position, assignment.expression}, true);
+	MethodBinding mb2 = this.getMethodBindingForOverload(scope, new Expression [] {this.positionOne, this.positionTwo, assignment.expression}, true);
 	if ((mb2 !=null) && (mb2.isValidBinding())) {
 		this.resolvedType = TypeBinding.VOID;
 		this.setExpectedType(this.resolvedType);
-		//Return value will be discarded if exist
 		/*if(mb2.returnType != TypeBinding.VOID)
 		scope.problemReporter().typeMismatchError(mb2.returnType, TypeBinding.VOID, this, null);*/
-		if(this.position.resolvedType == null)
-			this.position.resolveType(scope);
+		if(this.positionOne.resolvedType == null)
+			this.positionOne.resolveType(scope);
+		if(this.positionTwo.resolvedType == null)
+			this.positionTwo.resolveType(scope);
 		if(assignment.expression == null)
 			assignment.expression.resolveType(scope);
 		this.receiver.computeConversion(scope, this.receiver.resolvedType, this.receiver.resolvedType);
-		this.position.computeConversion(scope, mb2.parameters[0], this.position.resolvedType);
-		assignment.expression.computeConversion(scope, mb2.parameters[1], assignment.expression.resolvedType);
+		this.positionOne.computeConversion(scope, mb2.parameters[0], this.positionOne.resolvedType);
+		this.positionTwo.computeConversion(scope, mb2.parameters[1], this.positionTwo.resolvedType);
+		assignment.expression.computeConversion(scope, mb2.parameters[2], assignment.expression.resolvedType);
 		this.appropriateMethodForOverload = mb2;
 		if (isMethodUseDeprecated(this.appropriateMethodForOverload, scope, true, new InvocationSite.EmptyWithAstNode(this)))
 			scope.problemReporter().deprecatedMethod(this.appropriateMethodForOverload, this);
-		//Return value will be discarded if exist
 		return this.resolvedType;
 	}
 
-	if(this.receiver == null || this.receiver.resolvedType == null ||  this.position == null || this.position.resolvedType == null
-			|| assignment.expression == null || assignment.expression.resolvedType == null){
+	if(this.receiver == null || this.receiver.resolvedType == null ||  this.positionOne == null || this.positionOne.resolvedType == null
+			||  this.positionTwo == null || this.positionTwo.resolvedType == null || assignment.expression == null || assignment.expression.resolvedType == null){
 		return null;
 	}
 
-	if(!this.receiver.resolvedType.isArrayType()){
-		scope.problemReporter().referenceMustBeArrayTypeAt(this.receiver.resolvedType, this);
-		return null;
-	}
-
-	return resolveType(scope);
+	scope.problemReporter().referenceMustBeArrayTypeAt(this.receiver.resolvedType, this);
+	return null;
 }
 
 public String getMethodName(boolean put) {
@@ -419,8 +376,6 @@ public MethodBinding getMethodBindingForOverload(BlockScope scope, Expression []
 }
 
 public MethodBinding getMethodBindingForOverload(BlockScope scope, final Expression [] arguments, TypeBinding[] types, boolean put) {
-	//	if (set) return null;
-
 	TypeBinding [] tb_right = new TypeBinding[types.length + arguments.length];
 	TypeBinding tb_left = null;
 
@@ -441,9 +396,9 @@ public MethodBinding getMethodBindingForOverload(BlockScope scope, final Express
 		tb_right[arguments.length + i] = types[i];
 		tbRightValid = tbRightValid && (tb_right[arguments.length + i] != null);
 	}
-	if ((tb_left == null) || (!tbRightValid)) return null;
+
 	final TypeBinding targetType = tb_left;
-	OperatorOverloadInvocationSite fakeInvocationSite = new OperatorOverloadInvocationSite() {
+	OperatorOverloadInvocationSite fakeInvocationSite = new OperatorOverloadInvocationSite(){
 		@Override
 		public TypeBinding invocationTargetType() {
 			return targetType;
@@ -455,6 +410,7 @@ public MethodBinding getMethodBindingForOverload(BlockScope scope, final Express
 	};
 
 	String ms = getMethodName(put);
+	if ((tb_left == null) || (!tbRightValid)) return null;
 	MethodBinding mb2 = scope.getMethod(tb_left, ms.toCharArray(), tb_right, fakeInvocationSite);
 	return mb2;
 }
@@ -466,7 +422,8 @@ public void generateOperatorOverloadCode(BlockScope currentScope, CodeStream cod
 public void generatePutCode(BlockScope currentScope, CodeStream codeStream, boolean valueRequired, Assignment assignment){
 	if (this.appropriateMethodForOverload != null){
 		this.receiver.generateCode(currentScope, codeStream,true);
-		this.position.generateCode(currentScope, codeStream, true);
+		this.positionOne.generateCode(currentScope, codeStream, true);
+		this.positionTwo.generateCode(currentScope, codeStream, true);
 		if(assignment != null)
 			assignment.expression.generateCode(currentScope, codeStream, true);
 		if (this.appropriateMethodForOverload.hasSubstitutedParameters() || this.appropriateMethodForOverload.hasSubstitutedReturnType()) {
@@ -498,7 +455,7 @@ public void generatePutCode(BlockScope currentScope, CodeStream codeStream, bool
 
 @Override
 public TypeBinding resolveTypeCompoundOverloadOperator(BlockScope scope, TypeBinding type) {
-	MethodBinding mb1 = getMethodBindingForOverload(scope, new Expression[]{this.position}, new TypeBinding[]{type}, true);
+	MethodBinding mb1 = getMethodBindingForOverload(scope, new Expression[]{this.positionOne, this.positionTwo}, new TypeBinding[]{type}, true);
 	if(mb1 == null || !mb1.isValidBinding()){
 		scope.problemReporter().referenceMustBeArrayTypeAt(this.receiver.resolvedType, this);
 		return null;
@@ -515,7 +472,8 @@ public void generatePreCompoundAssignment(BlockScope currentScope, CodeStream co
 		int operator, int preAssignImplicitConversion, boolean valueRequired) {
 	if (this.compoundAppropriateMethodForOverload != null){
 		this.receiver.generateCode(currentScope, codeStream,true);
-		this.position.generateCode(currentScope, codeStream, true);
+		this.positionOne.generateCode(currentScope, codeStream, true);
+		this.positionTwo.generateCode(currentScope, codeStream, true);
 	}
 
 }
