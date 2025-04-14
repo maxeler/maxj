@@ -47,7 +47,7 @@ public class SWITCH_Statement extends Statement {
 	public ThisReference thisReference;
 
 	// fallthrough
-	public final static int CASE = 0;
+	public final static int CAZE = 0;
 	public final static int FALLTHROUGH = 1;
 	public final static int ESCAPING = 2;
 
@@ -96,7 +96,7 @@ public class SWITCH_Statement extends Statement {
 			if (this.statements != null) {
 				int initialComplaintLevel = (flowInfo.reachMode() & FlowInfo.UNREACHABLE) != 0 ? Statement.COMPLAINED_FAKE_REACHABLE : Statement.NOT_COMPLAINED;
 				int complaintLevel = initialComplaintLevel;
-				int fallThroughState = CASE;
+				int fallThroughState = CAZE;
 				for (int i = 0, max = this.statements.length; i < max; i++) {
 					Statement statement = this.statements[i];
 					if ((caseIndex < this.caseCount) && (statement == this.cases[caseIndex])) { // statement is a case
@@ -108,7 +108,7 @@ public class SWITCH_Statement extends Statement {
 						}
 						caseInits = caseInits.mergedWith(flowInfo.unconditionalInits());
 						complaintLevel = initialComplaintLevel; // reset complaint
-						fallThroughState = CASE;
+						fallThroughState = CAZE;
 					} else if (statement == this.defaultCase) { // statement is the default case
 						this.scope.enclosingCASE = this.defaultCase; // record entering in a switch case block
 						if (fallThroughState == FALLTHROUGH
@@ -117,7 +117,7 @@ public class SWITCH_Statement extends Statement {
 						}
 						caseInits = caseInits.mergedWith(flowInfo.unconditionalInits());
 						complaintLevel = initialComplaintLevel; // reset complaint
-						fallThroughState = CASE;
+						fallThroughState = CAZE;
 					} else {
 						fallThroughState = FALLTHROUGH; // reset below if needed
 					}

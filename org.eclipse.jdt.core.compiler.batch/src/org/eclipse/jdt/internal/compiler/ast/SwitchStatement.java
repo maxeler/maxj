@@ -98,7 +98,7 @@ public class SwitchStatement extends Expression {
 	BranchLabel switchPatternRestartTarget;
 
 	// fallthrough
-	public final static int CASE = 0;
+	public final static int CAZE = 0;
 	public final static int FALLTHROUGH = 1;
 	public final static int BREAKING  = 2;
 
@@ -671,7 +671,7 @@ public class SwitchStatement extends Expression {
 			if (this.statements != null) {
 				int initialComplaintLevel = (flowInfo.reachMode() & FlowInfo.UNREACHABLE) != 0 ? Statement.COMPLAINED_FAKE_REACHABLE : Statement.NOT_COMPLAINED;
 				int complaintLevel = initialComplaintLevel;
-				int fallThroughState = CASE;
+				int fallThroughState = CAZE;
 				int prevCaseStmtIndex = -100;
 				for (int i = 0, max = this.statements.length; i < max; i++) {
 					Statement statement = this.statements[i];
@@ -705,7 +705,7 @@ public class SwitchStatement extends Expression {
 							}
 						}
 						complaintLevel = initialComplaintLevel; // reset complaint
-						fallThroughState = this.containsPatterns ? FALLTHROUGH : CASE;
+						fallThroughState = this.containsPatterns ? FALLTHROUGH : CAZE;
 					} else {
 						fallThroughState = (this.switchBits & LabeledRules) != 0 || statement.doesNotCompleteNormally() ? BREAKING : FALLTHROUGH;  // reset below if needed
 					}
