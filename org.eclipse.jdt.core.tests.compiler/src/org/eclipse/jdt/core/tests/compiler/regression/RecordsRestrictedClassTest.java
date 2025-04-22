@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import junit.framework.Test;
+import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.ToolFactory;
 import org.eclipse.jdt.core.tests.util.Util;
 import org.eclipse.jdt.core.util.ClassFileBytesDisassembler;
@@ -9670,5 +9671,100 @@ public void testPR3675() {
 			"	^\n" +
 			"A canonical constructor is allowed only in record classes\n" +
 			"----------\n");
+}
+
+public void testGH3891() {
+	runNegativeTest(new String[] {
+		"Test.java",
+		"""
+		public class Test {
+			{
+				super();
+			}
+		}
+		"""
+		},
+		"""
+		----------
+		1. ERROR in Test.java (at line 3)
+			super();
+			^^^^^^^^
+		Constructor call must be the first statement in a constructor
+		----------
+		""");
+}
+public void testGH3891_preview() {
+	if (this.complianceLevel < ClassFileConstants.JDK24) return;
+	Runner runner = new Runner();
+	runner.customOptions = getCompilerOptions();
+	runner.customOptions.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.ENABLED);
+	runner.testFiles = new String[] {
+		"Test.java",
+		"""
+		public class Test {
+			{
+				super();
+			}
+		}
+		"""
+		};
+	runner.expectedCompilerLog =
+		"""
+		----------
+		1. ERROR in Test.java (at line 3)
+			super();
+			^^^^^^^^
+		Constructor call must be the first statement in a constructor
+		----------
+		""";
+	runner.runNegativeTest();
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3904
+// Unused parameters warning reported for record components
+public void testIssue3904() {
+	Map<String, String> options = getCompilerOptions();
+	options.put(CompilerOptions.OPTION_ReportUnusedParameter, CompilerOptions.ERROR);
+	this.runNegativeTest(
+	new String[] {
+			"X.java",
+			"class X {\n" +
+			"	public static void main(String[] args) {\n" +
+			"		Pair p = new Pair(\"4\", \"2\");\n" +
+			"		System.out.println(p.fTag() + p.fContent());\n" +
+			"	}\n" +
+			"	public record Pair(String fTag, String fContent) {}\n" + // should NOT warn on implicit constructor
+			"   public void foo(int unused) {\n" + // should warn on unused parameter of non-constructor
+			"   }\n" +
+			"   public record Person(String name, int age) {\n" +
+			"       public Person(String name, int age) {\n" + // Should warn here
+			"           this.name = null; this.age = 0;\n" +
+			"       }\n" +
+			"   }\n" +
+			"   public record Point (int x, int y) {\n" +
+			"       public Point {}\n" + // no warning here
+			"   }\n"+
+			"\n" +
+			"}\n",
+		},
+		"----------\n" +
+		"1. ERROR in X.java (at line 7)\n" +
+		"	public void foo(int unused) {\n" +
+		"	                    ^^^^^^\n" +
+		"The value of the parameter unused is not used\n" +
+		"----------\n" +
+		"2. ERROR in X.java (at line 10)\n" +
+		"	public Person(String name, int age) {\n" +
+		"	                     ^^^^\n" +
+		"The value of the parameter name is not used\n" +
+		"----------\n" +
+		"3. ERROR in X.java (at line 10)\n" +
+		"	public Person(String name, int age) {\n" +
+		"	                               ^^^\n" +
+		"The value of the parameter age is not used\n" +
+		"----------\n",
+		null,
+		true,
+		options
+	);
 }
 }
