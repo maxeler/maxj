@@ -332,15 +332,19 @@ public long getAnnotationTagBits() {
 	return originalField.tagBits;
 }
 
-public final boolean isDefault() {
-	return !isPublic() && !isProtected() && !isPrivate();
+@Override
+public ReferenceBinding getDeclaringClass() {
+	return this.declaringClass;
 }
-/* Answer true if the receiver is a deprecated field
-*/
 
 /* Answer true if the receiver has default visibility
 */
+public final boolean isDefault() {
+	return !isPublic() && !isProtected() && !isPrivate();
+}
 
+/* Answer true if the receiver is a deprecated field
+*/
 public final boolean isDeprecated() {
 	return (this.modifiers & ClassFileConstants.AccDeprecated) != 0;
 }
@@ -370,12 +374,7 @@ public final boolean isProtected() {
 public final boolean isPublic() {
 	return (this.modifiers & ClassFileConstants.AccPublic) != 0;
 }
-/* Answer true if the receiver is a static field
-*/
 
-public final boolean isStatic() {
-	return (this.modifiers & ClassFileConstants.AccStatic) != 0;
-}
 /* Answer true if the receiver is not defined in the source of the declaringClass
 */
 
@@ -419,8 +418,7 @@ public final int kind() {
 	return FIELD;
 }
 public boolean isRecordComponent() {
-	return this.declaringClass != null && this.declaringClass.isRecord() && !this.isStatic()
-			&& (this.modifiers & ExtraCompilerModifiers.AccRecord) != 0;
+	return this.declaringClass != null && this.declaringClass.isRecord() && !this.isStatic() && this instanceof SyntheticFieldBinding;
 }
 /* Answer true if the receiver is visible to the invocationPackage.
 */

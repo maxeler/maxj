@@ -2164,9 +2164,12 @@ public final class CompletionEngine
 							contextAccepted = true;
 							buildContext(importReference, null, parsedUnit, null, null);
 							if(!this.requestor.isIgnored(CompletionProposal.KEYWORD)) {
-								setSourceAndTokenRange(importReference.sourceStart, importReference.sourceEnd);
-								CompletionOnKeyword keyword = (CompletionOnKeyword)importReference;
-								findKeywords(keyword.getToken(), keyword.getPossibleKeywords(), false, parsedUnit.currentPackage != null);
+								// do not suggest `import` or `package` keywords if the cursor is before an existing package declaration
+								if (parsedUnit.currentPackage == null || importReference.sourceStart >= parsedUnit.currentPackage.sourceStart) {
+									setSourceAndTokenRange(importReference.sourceStart, importReference.sourceEnd);
+									CompletionOnKeyword keyword = (CompletionOnKeyword)importReference;
+									findKeywords(keyword.getToken(), keyword.getPossibleKeywords(), false, parsedUnit.currentPackage != null);
+								}
 							}
 							debugPrintf();
 							return;
@@ -6377,7 +6380,7 @@ public final class CompletionEngine
 					next : for (AbstractMethodDeclaration method : methods) {
 						if (!method.isConstructor()) continue next;
 
-						Argument[] arguments = method.arguments;
+						AbstractVariableDeclaration[] arguments = method.arguments(true);
 						int argumentsLength = arguments == null ? 0 : arguments.length;
 
 						if (parameterCount != argumentsLength) continue next;
@@ -10895,6 +10898,9 @@ public final class CompletionEngine
 		TypeBinding erasure =  method.declaringClass.erasure();
 		if(!(erasure instanceof ReferenceBinding)) return null;
 
+		if (method.isCanonicalConstructor() && method instanceof SyntheticMethodBinding synthesizedCCtor)
+			return synthesizedCCtor.parameterNames;
+
 		char[][] parameterNames = null;
 
 		int length = parameterTypeNames.length;
@@ -10913,7 +10919,7 @@ public final class CompletionEngine
 					AbstractMethodDeclaration methodDecl = parsedType.declarationOf(method.original());
 
 					if (methodDecl != null){
-						Argument[] arguments = methodDecl.arguments;
+						AbstractVariableDeclaration[] arguments = methodDecl.arguments(true);
 						parameterNames = new char[length][];
 
 						for(int i = 0 ; i < length ; i++){

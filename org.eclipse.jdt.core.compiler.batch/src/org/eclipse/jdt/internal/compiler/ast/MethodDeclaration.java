@@ -104,7 +104,7 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 					FlowInfo.DEAD_END);
 
 			// nullity, owning and mark as assigned
-			analyseArguments(classScope.environment(), flowInfo, flowContext, this.arguments, this.binding);
+			analyseArguments(classScope.environment(), flowInfo, flowContext, this.arguments, this.binding, this.scope);
 
 			BiPredicate<TypeBinding, ReferenceBinding> condition = (argType, declClass) -> {
 				ReferenceBinding enclosingType = argType.enclosingType();
@@ -237,20 +237,12 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 	public RecordComponent getRecordComponent() {
 		if (this.arguments != null && this.arguments.length != 0)
 			return null;
-		ClassScope skope = this.scope.classScope();
-		TypeDeclaration typeDecl = skope.referenceContext;
-		if (!typeDecl.isRecord())
-			return null;
-		if (!(skope.referenceContext.isRecord()))
-			return null;
-		RecordComponent[] recComps = typeDecl.recordComponents;
-		if (recComps == null || recComps.length == 0)
-			return null;
-		for (RecordComponent recComp : recComps) {
-			if (recComp == null || recComp.name == null)
-				continue;
-			if (CharOperation.equals(this.selector, recComp.name)) {
-				return recComp;
+		TypeDeclaration typeDecl = this.scope.referenceType();
+		if (typeDecl.isRecord()) {
+			for (RecordComponent component : typeDecl.recordComponents) {
+				if (CharOperation.equals(this.selector, component.name)) {
+					return component;
+				}
 			}
 		}
 		return null;
@@ -278,16 +270,18 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 		}
 		RecordComponent recordComponent = getRecordComponent();
 		if (recordComponent != null) {
-			/* JLS 14 Records Sec 8.10.3 */
 			if (this.returnType != null && TypeBinding.notEquals(this.returnType.resolvedType, recordComponent.type.resolvedType))
 				this.scope.problemReporter().recordIllegalAccessorReturnType(this.returnType, recordComponent.type.resolvedType);
 			if (this.typeParameters != null)
 				this.scope.problemReporter().recordAccessorMethodShouldNotBeGeneric(this);
 			if (this.binding != null) {
-				if (!(this.binding.isPublic()))
+				if (!this.binding.isPublic())
 					this.scope.problemReporter().recordAccessorMethodShouldBePublic(this);
 				if (this.binding.isStatic())
 					this.scope.problemReporter().recordAccessorMethodShouldNotBeStatic(this);
+				if ((this.binding.modifiers & ExtraCompilerModifiers.AccOverriding) == 0) {
+					this.scope.problemReporter().recordAccessorMissingOverrideAnnotation(this);
+				}
 			}
 			if (this.thrownExceptions != null)
 				this.scope.problemReporter().recordAccessorMethodHasThrowsClause(this);
@@ -324,7 +318,7 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 		// check @Override annotation
 		final CompilerOptions compilerOptions = this.scope.compilerOptions();
 		checkOverride: {
-			// For a record component accessor method, don't bother with checking for override (JLS 15 9.6.4.4)
+			// For a record component accessor method, don't bother with checking for override
 			if (this.binding == null || recordComponent != null) break checkOverride;
 			long complianceLevel = compilerOptions.complianceLevel;
 			int bindingModifiers = this.binding.modifiers;

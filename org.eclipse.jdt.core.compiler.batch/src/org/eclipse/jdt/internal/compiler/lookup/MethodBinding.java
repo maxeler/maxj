@@ -519,6 +519,7 @@ protected void fillInDefaultNonNullness(AbstractMethodDeclaration sourceMethod, 
 		this.parameterFlowBits = new byte[this.parameters.length];
 	boolean added = false;
 	int length = this.parameterFlowBits.length;
+	LocalVariableBinding [] argumentBindings = sourceMethod == null ? Binding.NO_ARGUMENT_BINDINGS : sourceMethod.argumentBindings();
 	for (int i = 0; i < length; i++) {
 		if(!needToApplyParameterNonNullDefault.hasNonNullDefaultForParam(i)) {
 			continue;
@@ -530,10 +531,11 @@ protected void fillInDefaultNonNullness(AbstractMethodDeclaration sourceMethod, 
 			added = true;
 			this.parameterFlowBits[i] |= PARAM_NONNULL;
 			if (sourceMethod != null) {
-				sourceMethod.arguments[i].binding.tagBits |= TagBits.AnnotationNonNull;
+				argumentBindings[i].tagBits |= TagBits.AnnotationNonNull;
 			}
 		} else if (sourceMethod != null && (this.parameterFlowBits[i] & PARAM_NONNULL) != 0) {
-			sourceMethod.scope.problemReporter().nullAnnotationIsRedundant(sourceMethod, i);
+			if (!sourceMethod.isCompactConstructor()) // Don't complain about implicit parameter. Also component nullity applies to more than just the parameter.
+				sourceMethod.scope.problemReporter().nullAnnotationIsRedundant(sourceMethod, i);
 		}
 	}
 	if (added)
@@ -560,6 +562,7 @@ protected void fillInDefaultNonNullness18(AbstractMethodDeclaration sourceMethod
 	if (hasNonNullDefaultForParameter.hasAnyNonNullDefault()) {
 		boolean added = false;
 		int length = this.parameters.length;
+		LocalVariableBinding [] argumentBindings = sourceMethod == null ? Binding.NO_ARGUMENT_BINDINGS : sourceMethod.argumentBindings();
 		for (int i = 0; i < length; i++) {
 			if (!hasNonNullDefaultForParameter.hasNonNullDefaultForParam(i))
 				continue;
@@ -572,7 +575,7 @@ protected void fillInDefaultNonNullness18(AbstractMethodDeclaration sourceMethod
 				if (!parameter.isBaseType()) {
 					this.parameters[i] = env.createNonNullAnnotatedType(parameter);
 					if (sourceMethod != null)
-						sourceMethod.arguments[i].binding.type = this.parameters[i];
+						argumentBindings[i].type = this.parameters[i];
 				}
 			}
 		}
@@ -860,14 +863,6 @@ public final boolean isFinal() {
 public final boolean isImplementing() {
 	return (this.modifiers & ExtraCompilerModifiers.AccImplementing) != 0;
 }
-
-
-/* Answer true if the method is an implicit method - only for records
-*/
-public final boolean isImplicit() {
-	return (this.extendedTagBits & ExtendedTagBits.isImplicit) != 0;
-}
-
 
 /*
  * Answer true if the receiver is a "public static void main(String[])" method
@@ -1545,6 +1540,13 @@ public boolean isWellknownMethod(char[][] compoundClassName, char[] wellKnownSel
 public boolean isWellknownMethod(int typeId, char[] wellKnownSelector) {
 	return this.declaringClass.id == typeId
 			&& CharOperation.equals(this.selector, wellKnownSelector);
+}
+public boolean isAsVisible(ReferenceBinding declaringType) {
+		if (declaringType.modifiers == this.modifiers || this.isPublic() || declaringType.isPrivate()) return true;
+		if (declaringType.isPublic()) return false;
+		if (this.isProtected()) return true;
+		if (declaringType.isProtected()) return false;
+		return !this.isPrivate();
 }
 }
 
