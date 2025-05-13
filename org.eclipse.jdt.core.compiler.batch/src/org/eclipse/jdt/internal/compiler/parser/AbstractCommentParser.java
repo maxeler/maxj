@@ -1453,15 +1453,15 @@ public abstract class AbstractCommentParser implements JavadocTagConstants {
 							if (this.reportProblems) this.sourceParser.problemReporter().javadocInvalidValueReference(start, getIndexPosition(), this.sourceParser.modifiers);
 						}
 						return false;
+					case TokenNameHASH : // @see ...#member
+						consumeToken();
+						reference = parseMember(typeRef);
+						if (reference != null) {
+							return pushSeeRef(reference);
+						}
+						return false;
 					case TokenNameERROR :
 						consumeToken();
-						if (this.scanner.currentCharacter == '#') { // @see ...#member
-							reference = parseMember(typeRef);
-							if (reference != null) {
-								return pushSeeRef(reference);
-							}
-							return false;
-						}
 						char[] currentError = this.scanner.getCurrentIdentifierSource();
 						if (currentError.length>0 && currentError[0] == '"') {
 							if (this.reportProblems) {
