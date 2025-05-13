@@ -2038,13 +2038,6 @@ protected void consumeBinaryExpression(int op) {
 					expr2,
 					op);
 			break;
-		case CAT :
-			this.expressionStack[this.expressionPtr] =
-				new CAT_Expression(
-					expr1,
-					expr2,
-					op);
-			break;
 		default :
 			this.expressionStack[this.expressionPtr] =
 				new BinaryExpression(
@@ -2164,13 +2157,6 @@ protected void consumeBinaryExpressionWithName(int op) {
 			this.intPtr--; // star end position or starting position of angle bracket
 			this.expressionStack[this.expressionPtr] =
 				new BinaryExpression(
-					expr1,
-					expr2,
-					op);
-			break;
-		case CAT :
-			this.expressionStack[this.expressionPtr] =
-				new CAT_Expression(
 					expr1,
 					expr2,
 					op);
