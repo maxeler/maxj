@@ -5296,7 +5296,7 @@ boolean computeKeywords(int kind, List<char[]> keywords) {
 		keywords.add(Keywords.FOR);
 		keywords.add(Keywords.IF_);
 		keywords.add(Keywords.RETURN);
-		keywords.add(Keywords.SWITCH);
+		keywords.add(Keywords.SWITCH_);
 		keywords.add(Keywords.SYNCHRONIZED);
 		keywords.add(Keywords.THROW);
 		keywords.add(Keywords.TRY);
@@ -5343,7 +5343,7 @@ boolean computeKeywords(int kind, List<char[]> keywords) {
 			keywords.add(Keywords.VAR);
 		}
 		if (kind == K_SELECTOR_QUALIFIER && this.options.complianceLevel >= ClassFileConstants.JDK12) {
-			keywords.add(Keywords.SWITCH);
+			keywords.add(Keywords.SWITCH_);
 		}
 		keywords.add(Keywords.TRUE);
 		keywords.add(Keywords.FALSE);
@@ -5366,7 +5366,7 @@ boolean computeKeywords(int kind, List<char[]> keywords) {
 			keywords.add(Keywords.FOR);
 			keywords.add(Keywords.IF_);
 			keywords.add(Keywords.RETURN);
-			keywords.add(Keywords.SWITCH);
+			keywords.add(Keywords.SWITCH_);
 			keywords.add(Keywords.SYNCHRONIZED);
 			keywords.add(Keywords.THROW);
 			keywords.add(Keywords.TRY);
