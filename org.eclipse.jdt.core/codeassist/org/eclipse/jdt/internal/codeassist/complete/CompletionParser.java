@@ -127,11 +127,11 @@ public class CompletionParser extends AssistParser {
 	/* the following fields are internal flags */
 
 	// block kind
-	static final int IF = 1;
+	static final int IF_ = 1;
 	static final int TRY = 2;
 	static final int CATCH = 3;
 	static final int WHILE = 4;
-	static final int SWITCH = 5;
+	static final int SWITCH_ = 5;
 	static final int FOR = 6;
 	static final int DO = 7;
 	static final int SYNCHRONIZED = 8;
@@ -1322,7 +1322,7 @@ private Statement buildMoreCompletionEnclosingContext(Statement statement) {
 		Object elementObjectInfo = this.elementObjectInfoStack[index];
 		int kind = this.elementKindStack[index];
 		if ((kind == K_BLOCK_DELIMITER || kind == K_CONTROL_STATEMENT_DELIMITER || kind == K_BETWEEN_INSTANCEOF_AND_RPAREN) // same set as above
-			&& this.elementInfoStack[index] == IF && elementObjectInfo != null
+			&& this.elementInfoStack[index] == IF_ && elementObjectInfo != null
 			&& (isInstanceOfGuard(elementObjectInfo) || (this.assistNode == elementObjectInfo)))
 		{
 			Expression condition = (Expression)elementObjectInfo;
@@ -1367,7 +1367,7 @@ private Statement buildMoreCompletionEnclosingContext(Statement statement) {
 	// collect all if statements with instanceof expressions that enclose the completion node
 	// https://bugs.eclipse.org/bugs/show_bug.cgi?id=304006
 	while (index >= 0) {
-		if (this.elementInfoStack[index] == IF && isInstanceOfGuard(this.elementObjectInfoStack[index])) {
+		if (this.elementInfoStack[index] == IF_ && isInstanceOfGuard(this.elementObjectInfoStack[index])) {
 			Expression condition = (Expression)this.elementObjectInfoStack[index];
 			ifStatement =
 				new IfStatement(
@@ -3353,7 +3353,7 @@ protected void consumeInstanceOfExpression() {
 	popElement(K_BINARY_OPERATOR);
 	// to handle https://bugs.eclipse.org/bugs/show_bug.cgi?id=261534
 	if (topKnownElementKind(COMPLETION_OR_ASSIST_PARSER) == K_BETWEEN_IF_AND_RIGHT_PAREN) {
-		pushOnElementStack(K_BETWEEN_INSTANCEOF_AND_RPAREN, IF, this.expressionStack[this.expressionPtr]);
+		pushOnElementStack(K_BETWEEN_INSTANCEOF_AND_RPAREN, IF_, this.expressionStack[this.expressionPtr]);
 	}
 
 	InstanceOfExpression exp = (InstanceOfExpression) this.expressionStack[this.expressionPtr];
@@ -4428,7 +4428,7 @@ protected void consumeToken(TerminalToken token) {
 						int info = topKnownElementInfo(COMPLETION_OR_ASSIST_PARSER);
 						popElement(K_CONTROL_STATEMENT_DELIMITER);
 						switch (info) {
-							case IF:
+							case IF_:
 								// include top-expression of these just for the benefit of hasPendingExpression():
 								// (TRY is not included, even Java9-t-w-r doesn't own an *expression*)
 							case FOR:
@@ -4449,7 +4449,7 @@ protected void consumeToken(TerminalToken token) {
 										pushOnElementStack(K_BLOCK_DELIMITER, CATCH);
 										break;
 									case K_BETWEEN_SWITCH_AND_RIGHT_PAREN :
-										pushOnElementStack(K_BLOCK_DELIMITER, SWITCH);
+										pushOnElementStack(K_BLOCK_DELIMITER, SWITCH_);
 										break;
 									case K_BETWEEN_SYNCHRONIZED_AND_RIGHT_PAREN :
 										pushOnElementStack(K_BLOCK_DELIMITER, SYNCHRONIZED);
@@ -4511,7 +4511,7 @@ protected void consumeToken(TerminalToken token) {
 					case K_BETWEEN_IF_AND_RIGHT_PAREN :
 						if(topKnownElementInfo(COMPLETION_OR_ASSIST_PARSER) == this.bracketDepth) {
 							popElement(K_BETWEEN_IF_AND_RIGHT_PAREN);
-							pushOnElementStack(K_CONTROL_STATEMENT_DELIMITER, IF, this.expressionStack[this.expressionPtr]);
+							pushOnElementStack(K_CONTROL_STATEMENT_DELIMITER, IF_, this.expressionStack[this.expressionPtr]);
 						}
 						break;
 					case K_BETWEEN_WHILE_AND_RIGHT_PAREN :
@@ -5265,8 +5265,8 @@ public NameReference createSingleAssistNameReference(char[] assistName, long pos
 			&& this.previousInfo == TRY) {
 			return new CompletionOnKeyword3(assistName, position, new char[][]{Keywords.CATCH, Keywords.FINALLY}, true);
 		} else if(kind == K_BLOCK_DELIMITER
-			&& topKnownElementInfo(COMPLETION_OR_ASSIST_PARSER) == SWITCH) {
-			return new CompletionOnKeyword3(assistName, position, new char[][]{Keywords.CASE, Keywords.DEFAULT}, false);
+			&& topKnownElementInfo(COMPLETION_OR_ASSIST_PARSER) == SWITCH_) {
+			return new CompletionOnKeyword3(assistName, position, new char[][]{Keywords.CASE_, Keywords.DEFAULT}, false);
 		} else {
 			List<char[]> keywordsList = new ArrayList<>(Keywords.COUNT);
 			canBeExplicitConstructorCall = computeKeywords(kind, keywordsList);
@@ -5294,7 +5294,7 @@ boolean computeKeywords(int kind, List<char[]> keywords) {
 		keywords.add(Keywords.ASSERT);
 		keywords.add(Keywords.DO);
 		keywords.add(Keywords.FOR);
-		keywords.add(Keywords.IF);
+		keywords.add(Keywords.IF_);
 		keywords.add(Keywords.RETURN);
 		keywords.add(Keywords.SWITCH);
 		keywords.add(Keywords.SYNCHRONIZED);
@@ -5314,16 +5314,16 @@ boolean computeKeywords(int kind, List<char[]> keywords) {
 
 		if(this.previousKind == K_BLOCK_DELIMITER) {
 			switch (this.previousInfo) {
-				case IF :
-					keywords.add(Keywords.ELSE);
+				case IF_ :
+					keywords.add(Keywords.ELSE_);
 					break;
 				case CATCH :
 					keywords.add(Keywords.CATCH);
 					keywords.add(Keywords.FINALLY);
 					break;
 			}
-		} else if(this.previousKind == K_CONTROL_STATEMENT_DELIMITER && this.previousInfo == IF) {
-			keywords.add(Keywords.ELSE);
+		} else if(this.previousKind == K_CONTROL_STATEMENT_DELIMITER && this.previousInfo == IF_) {
+			keywords.add(Keywords.ELSE_);
 		}
 		if(isInsideLoop()) {
 			keywords.add(Keywords.CONTINUE);
@@ -5359,12 +5359,12 @@ boolean computeKeywords(int kind, List<char[]> keywords) {
 				keywords.add(Keywords.DEFAULT);
 			}
 			keywords.add(Keywords.BREAK);
-			keywords.add(Keywords.CASE);
+			keywords.add(Keywords.CASE_);
 			keywords.add(Keywords.YIELD);
 			keywords.add(Keywords.ASSERT);
 			keywords.add(Keywords.DO);
 			keywords.add(Keywords.FOR);
-			keywords.add(Keywords.IF);
+			keywords.add(Keywords.IF_);
 			keywords.add(Keywords.RETURN);
 			keywords.add(Keywords.SWITCH);
 			keywords.add(Keywords.SYNCHRONIZED);
@@ -6084,14 +6084,14 @@ public void recoveryTokenCheck() {
 		case TokenNamecase :
 			super.recoveryTokenCheck();
 			if(topKnownElementKind(COMPLETION_OR_ASSIST_PARSER) == K_BLOCK_DELIMITER
-				&& topKnownElementInfo(COMPLETION_OR_ASSIST_PARSER) == SWITCH) {
+				&& topKnownElementInfo(COMPLETION_OR_ASSIST_PARSER) == SWITCH_) {
 				pushOnElementStack(K_SWITCH_LABEL);
 			}
 			break;
 		case TokenNamedefault :
 			super.recoveryTokenCheck();
 			if(topKnownElementKind(COMPLETION_OR_ASSIST_PARSER) == K_BLOCK_DELIMITER
-				&& topKnownElementInfo(COMPLETION_OR_ASSIST_PARSER) == SWITCH) {
+				&& topKnownElementInfo(COMPLETION_OR_ASSIST_PARSER) == SWITCH_) {
 				pushOnElementStack(K_SWITCH_LABEL, DEFAULT);
 			} else if(topKnownElementKind(COMPLETION_OR_ASSIST_PARSER) == K_SWITCH_LABEL) {
 				popElement(K_SWITCH_LABEL);
