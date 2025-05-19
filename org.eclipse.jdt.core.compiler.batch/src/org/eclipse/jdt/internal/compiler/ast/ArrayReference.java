@@ -233,7 +233,7 @@ public void generateCompoundAssignment(BlockScope currentScope, CodeStream codeS
 @Override
 public void generatePostIncrement(BlockScope currentScope, CodeStream codeStream, CompoundAssignment postIncrement, boolean valueRequired) {
 	MethodBinding mb2 = this.getMethodBindingForOverload(currentScope, new Expression [] {this.position}, false);
-	if (mb2.isValidBinding()) {
+	if (mb2 != null && mb2.isValidBinding()) {
 		currentScope.problemReporter().abortDueToInternalError("Overloaded array reference post increment emulation is not implemented.", this); //$NON-NLS-1$
 		return;
 	}
@@ -292,22 +292,6 @@ public TypeBinding resolveType(BlockScope scope) {
 		this.position.computeConversion(scope, overloadMethod.parameters[0], this.position.resolvedType);
 		this.setExpectedType(this.resolvedType);
 		return overloadMethod.returnType;
-	} else { // enforce INT
-		TypeBinding expectedTypeLocal = TypeBinding.INT;
-		this.position.setExpectedType(expectedTypeLocal); // needed in case of generic method invocation
-		TypeBinding expressionType = this.position.resolvedType;
-		if (expressionType == null) {
-			scope.problemReporter().typeMismatchError(TypeBinding.VOID, expectedTypeLocal, this, null);
-			return null;
-		}
-		if (TypeBinding.notEquals(expressionType, expectedTypeLocal)) {
-			if (!expressionType.isCompatibleWith(expectedTypeLocal)) {
-				if (!scope.isBoxingCompatibleWith(expressionType, expectedTypeLocal)) {
-					scope.problemReporter().typeMismatchError(expressionType, expectedTypeLocal, this, null);
-					return null;
-				}
-			}
-		}
 	}
 
 	TypeBinding arrayType = this.receiver.resolvedType; //Type(scope);
@@ -321,7 +305,8 @@ public TypeBinding resolveType(BlockScope scope) {
 			scope.problemReporter().referenceMustBeArrayTypeAt(arrayType, this);
 		}
 	}
-	TypeBinding positionType = this.position.resolvedType; //TypeExpecting(scope, TypeBinding.INT);
+	TypeBinding positionType = this.position.resolvedType == null ?
+			this.position.resolveTypeExpecting(scope, TypeBinding.INT) : this.position.resolvedType;
 	if (positionType != null) {
 		this.position.computeConversion(scope, TypeBinding.INT, positionType);
 	}
@@ -396,8 +381,7 @@ public TypeBinding resolveType(BlockScope scope, Expression expression) {
 		return this.resolvedType;
 	}
 
-	if(this.receiver == null || this.receiver.resolvedType == null ||  this.position == null || this.position.resolvedType == null
-			|| assignment.expression == null || assignment.expression.resolvedType == null){
+	if(this.receiver == null || this.receiver.resolvedType == null){
 		return null;
 	}
 
@@ -428,6 +412,9 @@ public MethodBinding getMethodBindingForOverload(BlockScope scope, final Express
 		tb_left = this.receiver.resolveType(scope);
 	else
 		tb_left = this.receiver.resolvedType;
+	if (tb_left == null || tb_left.isArrayType()) {
+		return null;
+	}
 
 	boolean tbRightValid = true;
 	for(int i=0; i<arguments.length; i++){
@@ -441,7 +428,7 @@ public MethodBinding getMethodBindingForOverload(BlockScope scope, final Express
 		tb_right[arguments.length + i] = types[i];
 		tbRightValid = tbRightValid && (tb_right[arguments.length + i] != null);
 	}
-	if ((tb_left == null) || (!tbRightValid)) return null;
+	if (!tbRightValid) return null;
 	final TypeBinding targetType = tb_left;
 	OperatorOverloadInvocationSite fakeInvocationSite = new OperatorOverloadInvocationSite() {
 		@Override

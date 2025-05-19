@@ -249,7 +249,7 @@ public String getBindingMethodName() {
 			return null;
 		TypeBinding typeCompoundOverloadOperator = null;
 		MethodBinding mb2 = null;
-		if (!originalLhsType.isBoxedPrimitiveType() && !originalLhsType.isBaseType() && originalLhsType.id != T_JavaLangString){
+		if (!originalLhsType.isArrayType() && !originalLhsType.isBoxedPrimitiveType() && !originalLhsType.isBaseType() && originalLhsType.id != T_JavaLangString){
 			mb2 = this.getMethodBindingForOverload(scope, originalLhsType, originalExpressionType);
 			if (mb2 != null){
 				this.appropriateMethodForOverload = mb2;
