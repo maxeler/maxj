@@ -4854,6 +4854,8 @@ public void invalidReturnTypeForOverloadedOperator(Statement statement, String r
 
 //Put method with non-void return type
 public void invalidPutReturnType(MethodBinding binding) {
+	int severity = computeSeverity(IProblem.MaxelerInvalidOverloadedPut);
+	if (severity == ProblemSeverities.Ignore) return;
 	StringBuffer methodDescription = new StringBuffer();
 	for(int i = 0; i < binding.parameters.length; i++){
 		if(methodDescription.length() != 0){

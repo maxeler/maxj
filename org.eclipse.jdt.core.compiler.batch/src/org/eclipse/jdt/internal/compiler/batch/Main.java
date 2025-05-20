@@ -4129,6 +4129,9 @@ private void handleErrorOrWarningToken(String token, boolean isEnabling, int sev
 						CompilerOptions.PRIVATE);
 				}
 				return;
+			} else if (token.equals("maxelerOverloadedPut")) { //$NON-NLS-1$
+				setSeverity(CompilerOptions.OPTION_ReportMaxelerOverloadedPut, severity, isEnabling);
+				return;
 			} else if (token.equals("missingJavadocTagsOverriding")) { //$NON-NLS-1$
 				this.options.put(
 					CompilerOptions.OPTION_ReportMissingJavadocTagsOverriding,

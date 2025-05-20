@@ -168,6 +168,7 @@ public class CompilerOptions {
 	public static final String OPTION_ReportRedundantSpecificationOfTypeArguments =  "org.eclipse.jdt.core.compiler.problem.redundantSpecificationOfTypeArguments"; //$NON-NLS-1$
 	public static final String OPTION_ForceMAXJ = "org.eclipse.jdt.core.compiler.forceMaxJ"; //$NON-NLS-1$
 	//public static final String OPTION_ReportMaxelerAssertStatement = "org.eclipse.jdt.core.compiler.problem.maxelerAssertStatement"; //$NON-NLS-1$
+	public static final String OPTION_ReportMaxelerOverloadedPut = "org.eclipse.jdt.core.compiler.problem.maxelerOverloadedPut"; //$NON-NLS-1$
 
 	// resource leak analysis:
 	public static final String OPTION_ReportUnclosedCloseable = "org.eclipse.jdt.core.compiler.problem.unclosedCloseable"; //$NON-NLS-1$
@@ -846,6 +847,8 @@ public class CompilerOptions {
 				return OPTION_ReportRedundantSpecificationOfTypeArguments;
 			//case MaxelerAssertStatement:
 			//		return OPTION_ReportMaxelerAssertStatement;
+			case MaxelerOverloadedPut:
+				return OPTION_ReportMaxelerOverloadedPut;
 
 			// resource leak analysis:
 			case UnclosedCloseable :
@@ -1109,6 +1112,7 @@ public class CompilerOptions {
 			OPTION_ReportUnusedWarningToken,
 			OPTION_ReportVarargsArgumentNeedCast,
 			//OPTION_ReportMaxelerAssertStatement,
+			OPTION_ReportMaxelerOverloadedPut,
 
 			// resource leak analysis:
 			OPTION_ReportUnclosedCloseable,
@@ -1437,6 +1441,7 @@ public class CompilerOptions {
 		optionsMap.put(OPTION_Compliance, versionFromJdkLevel(this.complianceLevel));
 		optionsMap.put(OPTION_ForceMAXJ, this.forceMAXJ ? ENABLED : DISABLED);
 		//optionsMap.put(OPTION_ReportMaxelerAssertStatement, getSeverityString(MaxelerAssertStatement));
+		optionsMap.put(OPTION_ReportMaxelerOverloadedPut, getSeverityString(MaxelerOverloadedPut));
 		optionsMap.put(OPTION_Release, this.release ? ENABLED : DISABLED);
 		optionsMap.put(OPTION_Source, versionFromJdkLevel(this.sourceLevel));
 		optionsMap.put(OPTION_TargetPlatform, versionFromJdkLevel(this.targetJDK));
@@ -2030,6 +2035,8 @@ public class CompilerOptions {
 		if ((optionValue = optionsMap.get(OPTION_ReportMethodCanBePotentiallyStatic)) != null) updateSeverity(MethodCanBePotentiallyStatic, optionValue);
 		if ((optionValue = optionsMap.get(OPTION_ReportRedundantSpecificationOfTypeArguments)) != null) updateSeverity(RedundantSpecificationOfTypeArguments, optionValue);
 		//if ((optionValue = optionsMap.get(OPTION_ReportMaxelerAssertStatement)) != null) updateSeverity(MaxelerAssertStatement, optionValue);
+		if ((optionValue = optionsMap.get(OPTION_ReportMaxelerOverloadedPut)) != null) updateSeverity(MaxelerOverloadedPut, optionValue);
+
 		// resource leak analysis:
 		if ((optionValue = optionsMap.get(OPTION_ReportUnclosedCloseable)) != null) updateSeverity(UnclosedCloseable, optionValue);
 		if ((optionValue = optionsMap.get(OPTION_ReportPotentiallyUnclosedCloseable)) != null) updateSeverity(PotentiallyUnclosedCloseable, optionValue);
@@ -2418,6 +2425,8 @@ public class CompilerOptions {
 		buf.append("\n\t- method can be potentially static: ").append(getSeverityString(MethodCanBePotentiallyStatic)); //$NON-NLS-1$
 		buf.append("\n\t- redundant specification of type arguments: ").append(getSeverityString(RedundantSpecificationOfTypeArguments)); //$NON-NLS-1$
 		//buf.append("\n\t- maxeler assert statement: ").append(getSeverityString(MaxelerAssertStatement)); //$NON-NLS-1$
+		buf.append("\n\t- return on overloaded put: ").append(getSeverityString(MaxelerOverloadedPut)); //$NON-NLS-1$
+
 		// resource leak analysis:
 		buf.append("\n\t- resource is not closed: ").append(getSeverityString(UnclosedCloseable)); //$NON-NLS-1$
 		buf.append("\n\t- resource may not be closed: ").append(getSeverityString(PotentiallyUnclosedCloseable)); //$NON-NLS-1$
