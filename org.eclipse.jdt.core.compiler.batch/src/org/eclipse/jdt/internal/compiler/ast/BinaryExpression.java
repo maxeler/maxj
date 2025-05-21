@@ -2311,7 +2311,11 @@ public TypeBinding resolveType(BlockScope scope) {
 	}
 
 	//if L is object or R is object
-	if((!leftType.isBoxedPrimitiveType() && !leftType.isBaseType() && leftType.id != T_JavaLangString) || (!rightType.isBoxedPrimitiveType() && !rightType.isBaseType() && rightType.id != T_JavaLangString)){
+	if (((!leftType.isBoxedPrimitiveType() && !leftType.isBaseType())
+			|| (!rightType.isBoxedPrimitiveType() && !rightType.isBaseType()))
+			// Special case: do not attempt to overload adds where at least one operand is string
+			&& (((this.bits & ASTNode.OperatorMASK) >> ASTNode.OperatorSHIFT) != OperatorIds.PLUS
+					|| (leftType.id != TypeIds.T_JavaLangString && rightType.id != TypeIds.T_JavaLangString))) {
 		MethodBinding overloadMethod = this.getMethodBindingForOverload(scope);
 		//if overloaded method is OK continue
 		if(overloadMethod != null && overloadMethod.isValidBinding()){
