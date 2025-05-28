@@ -480,9 +480,11 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 		// JLS3 15.25
 
 		MethodBinding mb2 = null;
+		boolean attemptedToResolveCondition = false;
 		// These fields are only set on non-overloadable operators, and if we try to resolve without them, things break
 		if (this.condition.bindingsWhenTrue() == NO_VARIABLES && this.condition.bindingsWhenFalse() == NO_VARIABLES) {
 			mb2 = this.getMethodBindingForOverload(scope);
+			attemptedToResolveCondition = true;
 		}
 		if ((mb2 != null) && (mb2.isValidBinding())) {
 			this.constant = Constant.NotAConstant;
@@ -509,7 +511,7 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 			this.constant = Constant.NotAConstant;
 			// some types of nodes crash if you try to resolve them twice...
 			// (known case: QualifiedNameReference corrupts its own bits field on successful resolution)
-			TypeBinding conditionType = this.condition.resolvedType == null ?
+			TypeBinding conditionType = !attemptedToResolveCondition ?
 					this.condition.resolveTypeExpecting(scope, TypeBinding.BOOLEAN) : this.condition.resolvedType;
 			// we might still get here if condition is not a boolean but does not implement the overload
 			if (conditionType != null
