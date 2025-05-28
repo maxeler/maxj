@@ -7123,9 +7123,6 @@ protected void consumeRule(int act) {
     case 336 : if (DEBUG) { System.out.println("RecordComponentHeaderRightParen ::= RPAREN"); }  //$NON-NLS-1$
 		    consumeRecordComponentHeaderRightParen(); 			break;
 
-    case 337 : if (DEBUG) { System.out.println("RecordHeader ::= LPAREN RecordComponentListOpt..."); }  //$NON-NLS-1$
-		    consumeRecordHeader(); 			break;
-
     case 338 : if (DEBUG) { System.out.println("RecordComponentListOpt ::="); }  //$NON-NLS-1$
 		    consumeRecordComponentsopt(); 			break;
 
@@ -10559,9 +10556,6 @@ protected void consumeRecordComponentHeaderRightParen() {
 		if (this.currentElement.parseTree() == typeDecl) return;
 	}
 	resetModifiers();
-}
-protected void consumeRecordHeader() {
-	//RecordHeader ::= '(' RecordComponentsopt RecordComponentHeaderRightParen
 }
 protected void consumeRecordComponentsopt() {
 	// RecordComponentsopt ::= $empty
