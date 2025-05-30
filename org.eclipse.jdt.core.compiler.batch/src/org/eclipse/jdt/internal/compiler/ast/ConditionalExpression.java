@@ -69,6 +69,7 @@ public class ConditionalExpression extends OperatorExpression implements IPolyEx
 	private boolean isPolyExpression = false;
 	private TypeBinding originalValueIfTrueType;
 	private TypeBinding originalValueIfFalseType;
+	private boolean attemptedToResolveValues = false;
 
 	public ConditionalExpression(Expression condition, Expression valueIfTrue, Expression valueIfFalse) {
 		this.condition = condition;
@@ -539,9 +540,13 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 			}
 
 			if (this.valueIfTrue instanceof CastExpression) this.valueIfTrue.bits |= DisableUnnecessaryCastCheck; // will check later on
-			this.originalValueIfTrueType = this.valueIfTrue.resolveTypeWithBindings(this.condition.bindingsWhenTrue(), scope);
+			if (!this.attemptedToResolveValues) {
+				this.originalValueIfTrueType = this.valueIfTrue.resolveTypeWithBindings(this.condition.bindingsWhenTrue(), scope);
+			}
 			if (this.valueIfFalse instanceof CastExpression) this.valueIfFalse.bits |= DisableUnnecessaryCastCheck; // will check later on
-			this.originalValueIfFalseType = this.valueIfFalse.resolveTypeWithBindings(this.condition.bindingsWhenFalse(), scope);
+			if (!this.attemptedToResolveValues) {
+				this.originalValueIfFalseType = this.valueIfFalse.resolveTypeWithBindings(this.condition.bindingsWhenFalse(), scope);
+			}
 
 			/*
 			 *
@@ -936,6 +941,7 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 		}
 		this.originalValueIfFalseType = this.valueIfFalse.resolvedType == null ? this.valueIfFalse.resolveType(scope) : this.valueIfFalse.resolvedType;
 		this.originalValueIfTrueType = this.valueIfTrue.resolvedType == null ? this.valueIfTrue.resolveType(scope) : this.valueIfTrue.resolvedType;
+		this.attemptedToResolveValues = true;
 		final Expression [] arguments = new Expression[] { this.valueIfTrue, this.valueIfFalse };
 
 		Invocation fakeInvocationSite = new OperatorOverloadInvocationSite(){
