@@ -969,8 +969,8 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 	}
 
 	private MethodBinding existEqFunction(BlockScope scope, EqualExpression localCondition) {
-		final TypeBinding tb_right = localCondition.right.resolvedType == null ? localCondition.right.resolveType(scope) : localCondition.right.resolvedType;
-		final TypeBinding tb_left = localCondition.left.resolvedType == null ? localCondition.left.resolveType(scope) : localCondition.left.resolvedType;
+		final TypeBinding tb_right = localCondition.right.resolvedType;
+		final TypeBinding tb_left = localCondition.left.resolvedType;
 		final TypeBinding[] tb_args = new TypeBinding[] { tb_right };
 		final Expression[] arguments = new Expression[] { localCondition.left, localCondition.right };
 
