@@ -1082,6 +1082,30 @@ public abstract class ASTNode {
 	public static final int UNNAMED_CLASS = 115;
 
 	/**
+	 * Node type constant indicating a node of type
+	 * <code>IFStatement</code>.
+	 * @see IF_Statement
+	 * @since 3.42
+	 */
+	public static final int _IF_STATEMENT = 200;
+
+	/**
+	 * Node type constant indicating a node of type
+	 * <code>SWITCHStatement</code>.
+	 * @see SWITCH_Statement
+	 * @since 3.42
+	 */
+	public static final int _SWITCH_STATEMENT = 201;
+
+	/**
+	 * Node type constant indicating a node of type
+	 * <code>SWITCHCASE</code>.
+	 * @see SWITCH_CASE
+	 * @since 3.42
+	 */
+	public static final int _SWITCH_CASE = 202;
+
+	/**
 	 * Returns the node class for the corresponding node type.
 	 *
 	 * @param nodeType AST node type
@@ -1167,6 +1191,8 @@ public abstract class ASTNode {
 				return GuardedPattern.class;
 			case IF_STATEMENT :
 				return IfStatement.class;
+			case _IF_STATEMENT :
+				return IF_Statement.class;
 			case IMPORT_DECLARATION :
 				return ImportDeclaration.class;
 			case INFIX_EXPRESSION :
@@ -1271,8 +1297,12 @@ public abstract class ASTNode {
 				return SuperMethodReference.class;
 			case SWITCH_CASE:
 				return SwitchCase.class;
+			case _SWITCH_CASE:
+				return SWITCH_CASE.class;
 			case SWITCH_STATEMENT :
 				return SwitchStatement.class;
+			case _SWITCH_STATEMENT :
+				return SWITCH_Statement.class;
 			case SWITCH_EXPRESSION :
 				return SwitchExpression.class;
 			case SYNCHRONIZED_STATEMENT :

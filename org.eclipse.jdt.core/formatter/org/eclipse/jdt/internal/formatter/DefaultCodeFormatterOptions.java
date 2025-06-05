@@ -272,6 +272,7 @@ public class DefaultCodeFormatterOptions {
 	public boolean indent_breaks_compare_to_cases;
 	public boolean indent_empty_lines;
 	public boolean indent_switchstatements_compare_to_cases;
+	public boolean indent_SWITCHstatements_compare_to_SWITCH;
 	public boolean indent_switchstatements_compare_to_switch;
 	public int indentation_size;
 
@@ -713,6 +714,7 @@ public class DefaultCodeFormatterOptions {
 		options.put(DefaultCodeFormatterConstants.FORMATTER_INDENT_BREAKS_COMPARE_TO_CASES, this.indent_breaks_compare_to_cases ? DefaultCodeFormatterConstants.TRUE : DefaultCodeFormatterConstants.FALSE);
 		options.put(DefaultCodeFormatterConstants.FORMATTER_INDENT_EMPTY_LINES, this.indent_empty_lines ? DefaultCodeFormatterConstants.TRUE : DefaultCodeFormatterConstants.FALSE);
 		options.put(DefaultCodeFormatterConstants.FORMATTER_INDENT_SWITCHSTATEMENTS_COMPARE_TO_CASES, this.indent_switchstatements_compare_to_cases ? DefaultCodeFormatterConstants.TRUE : DefaultCodeFormatterConstants.FALSE);
+		options.put(DefaultCodeFormatterConstants.FORMATTER_INDENT_SWITCH_STATEMENTS_COMPARE_TO_SWITCH, this.indent_SWITCHstatements_compare_to_SWITCH ? DefaultCodeFormatterConstants.TRUE : DefaultCodeFormatterConstants.FALSE);
 		options.put(DefaultCodeFormatterConstants.FORMATTER_INDENT_SWITCHSTATEMENTS_COMPARE_TO_SWITCH, this.indent_switchstatements_compare_to_switch ? DefaultCodeFormatterConstants.TRUE : DefaultCodeFormatterConstants.FALSE);
 		options.put(DefaultCodeFormatterConstants.FORMATTER_INDENTATION_SIZE, Integer.toString(this.tab_char == MIXED ? this.indentation_size : this.tab_size)); // reverse values swapping performed by IndentationTabPage
 		options.put(DefaultCodeFormatterConstants.FORMATTER_INSERT_NEW_LINE_AFTER_ANNOTATION_ON_TYPE, this.insert_new_line_after_annotation_on_type ? JavaCore.INSERT : JavaCore.DO_NOT_INSERT);
@@ -1691,6 +1693,10 @@ public class DefaultCodeFormatterOptions {
 		final Object indentSwitchstatementsCompareToSwitchOption = settings.get(DefaultCodeFormatterConstants.FORMATTER_INDENT_SWITCHSTATEMENTS_COMPARE_TO_SWITCH);
 		if (indentSwitchstatementsCompareToSwitchOption != null) {
 			this.indent_switchstatements_compare_to_switch = DefaultCodeFormatterConstants.TRUE.equals(indentSwitchstatementsCompareToSwitchOption);
+		}
+		final Object indentSWITCHstatementsCompareToSWITCHOption = settings.get(DefaultCodeFormatterConstants.FORMATTER_INDENT_SWITCH_STATEMENTS_COMPARE_TO_SWITCH);
+		if (indentSWITCHstatementsCompareToSWITCHOption != null) {
+			this.indent_SWITCHstatements_compare_to_SWITCH = DefaultCodeFormatterConstants.TRUE.equals(indentSWITCHstatementsCompareToSWITCHOption);
 		}
 		final Object indentationSizeOption = settings.get(DefaultCodeFormatterConstants.FORMATTER_INDENTATION_SIZE);
 		if (indentationSizeOption != null) {

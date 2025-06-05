@@ -2152,6 +2152,18 @@ public final class AST {
 	}
 
 	/**
+	 * Creates a new unparented IF statement node owned by this AST.
+	 * By default, the expression is unspecified (but legal),
+	 * the then statement is an empty block, and there is no else statement.
+	 *
+	 * @return a new unparented IF statement node
+	 * @since 3.42
+	 */
+	public IF_Statement newIFStatement() {
+		return new IF_Statement(this);
+	}
+
+	/**
 	 * Creates an unparented import declaration node owned by this AST.
 	 * The import declaration initially contains a single-type import
 	 * of a type with an unspecified name.
@@ -3090,6 +3102,29 @@ public final class AST {
 	 */
 	public SwitchStatement newSwitchStatement() {
 		return new SwitchStatement(this);
+	}
+
+	/**
+	 * Creates a new unparented SWITCH statement node owned by this AST.
+	 * By default, the expression is unspecified, but legal, and there are
+	 * no statements or switch cases.
+	 *
+	 * @return a new unparented labeled statement node
+	 * @since 3.42
+	 */
+	public SWITCH_Statement newSWITCHStatement() {
+		return new SWITCH_Statement(this);
+	}
+
+	/**
+	 * Creates a new unparented SWITCH CASE statement node owned by
+	 * this AST. By default, the expression is unspecified, but legal.
+	 *
+	 * @return a new unparented switch case node
+	 * @since 3.42
+	 */
+	public SWITCH_CASE newSWITCHCASE() {
+		return new SWITCH_CASE(this);
 	}
 
 	/**

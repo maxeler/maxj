@@ -69,6 +69,8 @@ class ASTRecoveryPropagator extends DefaultASTVisitor {
 		this.endingTokens.put(SuperMethodInvocation.class, new TerminalToken[]{TerminalToken.TokenNameRPAREN});
 		this.endingTokens.put(SwitchCase.class, new TerminalToken[]{TerminalToken.TokenNameCOLON});
 		this.endingTokens.put(SwitchStatement.class, new TerminalToken[]{TerminalToken.TokenNameRBRACE});
+		this.endingTokens.put(SWITCH_CASE.class, new TerminalToken[]{TerminalToken.TokenNameRBRACE});
+		this.endingTokens.put(SWITCH_Statement.class, new TerminalToken[]{TerminalToken.TokenNameRBRACE});
 		this.endingTokens.put(SynchronizedStatement.class, new TerminalToken[]{TerminalToken.TokenNameRBRACE});
 		this.endingTokens.put(ThisExpression.class, new TerminalToken[]{TerminalToken.TokenNamethis});
 		this.endingTokens.put(ThrowStatement.class, new TerminalToken[]{TerminalToken.TokenNameSEMICOLON});

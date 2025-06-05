@@ -273,6 +273,32 @@ public class ASTMatcher {
 	}
 
 	/**
+	 * Returns whether the given node and the other object match.
+	 * <p>
+	 * The default implementation provided by this class tests whether the
+	 * other object is a node of the same type with structurally isomorphic
+	 * child subtrees. Subclasses may override this method as needed.
+	 * </p>
+	 *
+	 * @param node the node
+	 * @param other the other object, or <code>null</code>
+	 * @return <code>true</code> if the subtree matches, or
+	 *   <code>false</code> if they do not match or the other object has a
+	 *   different node type or is <code>null</code>
+	 * @since 3.42
+	 */
+	public boolean match(CompositeArrayAccess node, Object other) {
+		if (!(other instanceof CompositeArrayAccess)) {
+			return false;
+		}
+		CompositeArrayAccess o = (CompositeArrayAccess) other;
+		return (
+			safeSubtreeMatch(node.getArray(), o.getArray())
+				&& safeSubtreeMatch(node.getIndexOne(), o.getIndexOne())
+				&& safeSubtreeMatch(node.getIndexTwo(), o.getIndexTwo()));
+	}
+
+	/**
 	 * Returns whether the given node and the other object object match.
 	 * <p>
 	 * The default implementation provided by this class tests whether the
@@ -1103,6 +1129,32 @@ public class ASTMatcher {
 			return false;
 		}
 		IfStatement o = (IfStatement) other;
+		return (
+			safeSubtreeMatch(node.getExpression(), o.getExpression())
+				&& safeSubtreeMatch(node.getThenStatement(), o.getThenStatement())
+				&& safeSubtreeMatch(node.getElseStatement(), o.getElseStatement()));
+	}
+
+	/**
+	 * Returns whether the given node and the other object match.
+	 * <p>
+	 * The default implementation provided by this class tests whether the
+	 * other object is a node of the same type with structurally isomorphic
+	 * child subtrees. Subclasses may override this method as needed.
+	 * </p>
+	 *
+	 * @param node the node
+	 * @param other the other object, or <code>null</code>
+	 * @return <code>true</code> if the subtree matches, or
+	 *   <code>false</code> if they do not match or the other object has a
+	 *   different node type or is <code>null</code>
+	 * @since 3.42
+	 */
+	public boolean match(IF_Statement node, Object other) {
+		if (!(other instanceof IF_Statement)) {
+			return false;
+		}
+		IF_Statement o = (IF_Statement) other;
 		return (
 			safeSubtreeMatch(node.getExpression(), o.getExpression())
 				&& safeSubtreeMatch(node.getThenStatement(), o.getThenStatement())
@@ -2530,6 +2582,29 @@ public class ASTMatcher {
 	}
 
 	/**
+	 * Returns whether the given node and the other object match.
+	 * <p>
+	 * The default implementation provided by this class tests whether the
+	 * other object is a node of the same type with structurally isomorphic
+	 * child subtrees. Subclasses may override this method as needed.
+	 * </p>
+	 *
+	 * @param node the node
+	 * @param other the other object, or <code>null</code>
+	 * @return <code>true</code> if the subtree matches, or
+	 *   <code>false</code> if they do not match or the other object has a
+	 *   different node type or is <code>null</code>
+	 * @since 3.42
+	 */
+	public boolean match(SWITCH_CASE node, Object other) {
+		if (!(other instanceof SWITCH_CASE)) {
+			return false;
+		}
+		SWITCH_CASE o = (SWITCH_CASE) other;
+		return safeSubtreeMatch(node.getExpression(), o.getExpression());
+	}
+
+	/**
 	 * Return whether the deprecated comment strings of the given java doc are equals.
 	 * <p>
 	 * Note the only purpose of this method is to hide deprecated warnings.
@@ -2582,6 +2657,31 @@ public class ASTMatcher {
 			return false;
 		}
 		SwitchStatement o = (SwitchStatement) other;
+		return (
+			safeSubtreeMatch(node.getExpression(), o.getExpression())
+				&& safeSubtreeListMatch(node.statements(), o.statements()));
+	}
+
+	/**
+	 * Returns whether the given node and the other object match.
+	 * <p>
+	 * The default implementation provided by this class tests whether the
+	 * other object is a node of the same type with structurally isomorphic
+	 * child subtrees. Subclasses may override this method as needed.
+	 * </p>
+	 *
+	 * @param node the node
+	 * @param other the other object, or <code>null</code>
+	 * @return <code>true</code> if the subtree matches, or
+	 *   <code>false</code> if they do not match or the other object has a
+	 *   different node type or is <code>null</code>
+	 * @since 3.42
+	 */
+	public boolean match(SWITCH_Statement node, Object other) {
+		if (!(other instanceof SWITCH_Statement)) {
+			return false;
+		}
+		SWITCH_Statement o = (SWITCH_Statement) other;
 		return (
 			safeSubtreeMatch(node.getExpression(), o.getExpression())
 				&& safeSubtreeListMatch(node.statements(), o.statements()));

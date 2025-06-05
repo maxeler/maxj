@@ -603,6 +603,20 @@ public class ASTRewriteFlattener extends ASTVisitor {
 	}
 
 	@Override
+	public boolean visit(IF_Statement node) {
+		this.result.append("IF ("); //$NON-NLS-1$
+		getChildNode(node, IF_Statement.EXPRESSION_PROPERTY).accept(this);
+		this.result.append(')');
+		getChildNode(node, IF_Statement.THEN_STATEMENT_PROPERTY).accept(this);
+		ASTNode elseStatement= getChildNode(node, IF_Statement.ELSE_STATEMENT_PROPERTY);
+		if (elseStatement != null) {
+			this.result.append(" ELSE "); //$NON-NLS-1$
+			elseStatement.accept(this);
+		}
+		return false;
+	}
+
+	@Override
 	public boolean visit(ImportDeclaration node) {
 		this.result.append("import "); //$NON-NLS-1$
 		if (node.getAST().apiLevel() >= JLS23_INTERNAL) {
@@ -1158,6 +1172,37 @@ public class ASTRewriteFlattener extends ASTVisitor {
 	@Override
 	public boolean visit(SwitchStatement node) {
 		visitSwitchNode(node);
+		return false;
+	}
+
+	/*
+	 * @see ASTVisitor#visit(SwitchCase)
+	 */
+	@Override
+	public boolean visit(SWITCH_CASE node) {
+		ASTNode expression= getChildNode(node, SWITCH_CASE.EXPRESSION_PROPERTY);
+		if (expression == null) {
+			this.result.append("OTHERWISE"); //$NON-NLS-1$
+		} else {
+			this.result.append("CASE "); //$NON-NLS-1$
+			expression.accept(this);
+		}
+		this.result.append('{');
+		this.result.append('}');
+		return false;
+	}
+
+	/*
+	 * @see ASTVisitor#visit(SwitchStatement)
+	 */
+	@Override
+	public boolean visit(SWITCH_Statement node) {
+		this.result.append("SWITCH ("); //$NON-NLS-1$
+		getChildNode(node, SWITCH_Statement.EXPRESSION_PROPERTY).accept(this);
+		this.result.append(')');
+		this.result.append('{');
+		visitList(node, SWITCH_Statement.STATEMENTS_PROPERTY, null);
+		this.result.append('}');
 		return false;
 	}
 

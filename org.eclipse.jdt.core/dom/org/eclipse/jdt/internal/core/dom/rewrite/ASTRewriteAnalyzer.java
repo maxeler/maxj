@@ -3273,6 +3273,56 @@ public final class ASTRewriteAnalyzer extends ASTVisitor {
 	}
 
 	@Override
+	public boolean visit(IF_Statement node) {
+		if (!hasChildrenChanges(node)) {
+			return doVisitUnchangedChildren(node);
+		}
+
+		int pos= rewriteRequiredNode(node, IF_Statement.EXPRESSION_PROPERTY); // statement
+
+		RewriteEvent thenEvent= getEvent(node, IF_Statement.THEN_STATEMENT_PROPERTY);
+		int elseChange= getChangeKind(node, IF_Statement.ELSE_STATEMENT_PROPERTY);
+
+		if (thenEvent != null && thenEvent.getChangeKind() != RewriteEvent.UNCHANGED) {
+			try {
+				TerminalToken tok= getScanner().readNext(pos, true); // after the closing parent
+				pos= (tok == TerminalToken.TokenNameRPAREN) ? getScanner().getCurrentEndOffset() : getScanner().getCurrentStartOffset();
+
+				int indent= getIndent(node.getStartPosition());
+
+				int endPos= -1;
+				Object elseStatement= getOriginalValue(node, IF_Statement.ELSE_STATEMENT_PROPERTY);
+				if (elseStatement != null) {
+					ASTNode thenStatement = (ASTNode) thenEvent.getOriginalValue();
+					endPos= getScanner().getTokenStartOffset(TerminalToken.TokenNameELSE, thenStatement.getStartPosition() + thenStatement.getLength()); // else keyword
+				}
+				if (elseStatement == null || elseChange != RewriteEvent.UNCHANGED) {
+					pos= rewriteBodyNode(node, IF_Statement.THEN_STATEMENT_PROPERTY, pos, endPos, indent, this.formatter.IF_BLOCK_NO_ELSE);
+				} else {
+					pos= rewriteBodyNode(node, IF_Statement.THEN_STATEMENT_PROPERTY, pos, endPos, indent, this.formatter.IF_BLOCK_WITH_ELSE);
+				}
+			} catch (CoreException e) {
+				handleException(e);
+			}
+		} else {
+			pos= doVisit(node, IF_Statement.THEN_STATEMENT_PROPERTY, pos);
+		}
+
+		if (elseChange != RewriteEvent.UNCHANGED) {
+			int indent= getIndent(node.getStartPosition());
+			Object newThen= getNewValue(node, IF_Statement.THEN_STATEMENT_PROPERTY);
+			if (newThen instanceof Block) {
+				rewriteBodyNode(node, IF_Statement.ELSE_STATEMENT_PROPERTY, pos, -1, indent, this.formatter.ELSE_AFTER_BLOCK);
+			} else {
+				rewriteBodyNode(node, IF_Statement.ELSE_STATEMENT_PROPERTY, pos, -1, indent, this.formatter.ELSE_AFTER_STATEMENT);
+			}
+		} else {
+			pos= doVisit(node, IF_Statement.ELSE_STATEMENT_PROPERTY, pos);
+		}
+		return false;
+	}
+
+	@Override
 	public boolean visit(ImportDeclaration node) {
 		if (!hasChildrenChanges(node)) {
 			return doVisitUnchangedChildren(node);
@@ -3947,6 +3997,17 @@ public final class ASTRewriteAnalyzer extends ASTVisitor {
 		return false;
 	}
 
+	@Override
+	public boolean visit(SWITCH_CASE node) {
+		if (!hasChildrenChanges(node)) {
+			return doVisitUnchangedChildren(node);
+		}
+
+		// dont allow switching from case to default or back. New statements should be created.
+		rewriteRequiredNode(node, SWITCH_CASE.EXPRESSION_PROPERTY);
+		return false;
+	}
+
 	class SwitchListLabeledRuleRewriter extends SwitchListRewriter {
 
 		public SwitchListLabeledRuleRewriter(int initialIndent) {
@@ -4210,6 +4271,37 @@ public final class ASTRewriteAnalyzer extends ASTVisitor {
 			}
 		} else {
 			voidVisit(node, SwitchStatement.STATEMENTS_PROPERTY);
+		}
+		return false;
+	}
+
+	@Override
+	public boolean visit(SWITCH_Statement node) {
+		if (!hasChildrenChanges(node)) {
+			return doVisitUnchangedChildren(node);
+		}
+
+		int pos= rewriteRequiredNode(node, SWITCH_Statement.EXPRESSION_PROPERTY);
+
+		ChildListPropertyDescriptor property= SWITCH_Statement.STATEMENTS_PROPERTY;
+		if (getChangeKind(node, property) != RewriteEvent.UNCHANGED) {
+			try {
+				pos= getScanner().getTokenEndOffset(TerminalToken.TokenNameLBRACE, pos);
+				int insertIndent= getIndent(node.getStartPosition());
+				if (DefaultCodeFormatterConstants.TRUE.equals(this.options.get(DefaultCodeFormatterConstants.FORMATTER_INDENT_SWITCHSTATEMENTS_COMPARE_TO_SWITCH))) {
+					insertIndent++;
+				}
+
+				ParagraphListRewriter listRewriter= new SwitchListRewriter(insertIndent);
+				StringBuffer leadString= new StringBuffer();
+				leadString.append(getLineDelimiter());
+				leadString.append(createIndentString(insertIndent));
+				listRewriter.rewriteList(node, property, pos, leadString.toString());
+			} catch (CoreException e) {
+				handleException(e);
+			}
+		} else {
+			voidVisit(node, SWITCH_Statement.STATEMENTS_PROPERTY);
 		}
 		return false;
 	}

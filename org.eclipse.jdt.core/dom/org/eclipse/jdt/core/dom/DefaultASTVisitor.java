@@ -169,6 +169,10 @@ class DefaultASTVisitor extends ASTVisitor {
 		endVisitNode(node);
 	}
 	@Override
+	public void endVisit(IF_Statement node) {
+		endVisitNode(node);
+	}
+	@Override
 	public void endVisit(ImportDeclaration node) {
 		endVisitNode(node);
 	}
@@ -374,6 +378,14 @@ class DefaultASTVisitor extends ASTVisitor {
 	}
 	@Override
 	public void endVisit(SwitchStatement node) {
+		endVisitNode(node);
+	}
+	@Override
+	public void endVisit(SWITCH_CASE node) {
+		endVisitNode(node);
+	}
+	@Override
+	public void endVisit(SWITCH_Statement node) {
 		endVisitNode(node);
 	}
 	@Override
@@ -612,6 +624,10 @@ class DefaultASTVisitor extends ASTVisitor {
 		return visitNode(node);
 	}
 	@Override
+	public boolean visit(IF_Statement node) {
+		return visitNode(node);
+	}
+	@Override
 	public boolean visit(ImportDeclaration node) {
 		return visitNode(node);
 	}
@@ -830,6 +846,16 @@ class DefaultASTVisitor extends ASTVisitor {
 
 	@Override
 	public boolean visit(SwitchStatement node) {
+		return visitNode(node);
+	}
+
+	@Override
+	public boolean visit(SWITCH_CASE node) {
+		return visitNode(node);
+	}
+
+	@Override
+	public boolean visit(SWITCH_Statement node) {
 		return visitNode(node);
 	}
 

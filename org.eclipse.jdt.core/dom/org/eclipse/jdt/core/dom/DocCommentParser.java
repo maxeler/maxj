@@ -1001,6 +1001,7 @@ class DocCommentParser extends AbstractCommentParser {
 			case TokenNamedo:
 			case TokenNamedouble:
 			case TokenNameelse:
+			case TokenNameELSE:
 			case TokenNameextends:
 			case TokenNamefalse:
 			case TokenNamefinal:
@@ -1008,6 +1009,7 @@ class DocCommentParser extends AbstractCommentParser {
 			case TokenNamefloat:
 			case TokenNamefor:
 			case TokenNameif:
+			case TokenNameIF:
 			case TokenNameimplements:
 			case TokenNameimport:
 			case TokenNameinstanceof:
