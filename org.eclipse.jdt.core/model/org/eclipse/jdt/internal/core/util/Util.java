@@ -862,7 +862,7 @@ public class Util {
 			Iterator iterator = fileExtensions.iterator();
 			while (iterator.hasNext()) {
 				String fileExtension = (String) iterator.next();
-				if (SuffixConstants.EXTENSION_java.equals(fileExtension) || SuffixConstants.EXTENSION_maxjava.equals(fileExtension))
+				if (SuffixConstants.EXTENSION_java.equals(fileExtension))
 					continue;
 				extensions[index++] = fileExtension.toCharArray();
 			}
