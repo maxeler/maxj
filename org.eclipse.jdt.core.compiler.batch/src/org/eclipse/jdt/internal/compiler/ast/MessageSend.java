@@ -609,9 +609,6 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
 		codeStream.invoke(Opcodes.OPC_invokestatic, this.syntheticAccessor, null /* default declaringClass */, this.typeArguments);
 	}
 	// required cast must occur even if no value is required
-	if (this.resolvedType != null) {
-		if (!this.resolvedType.isBaseType()) codeStream.checkcast(this.resolvedType);
-	}
 	if (this.valueCast != null) codeStream.checkcast(this.valueCast);
 	if (valueRequired){
 		// implicit conversion if necessary
