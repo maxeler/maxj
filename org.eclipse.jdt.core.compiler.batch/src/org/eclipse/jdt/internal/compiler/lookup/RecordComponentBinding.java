@@ -15,13 +15,16 @@
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
+import org.eclipse.jdt.internal.compiler.ast.AbstractVariableDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.RecordComponent;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
-import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 
 public class RecordComponentBinding extends VariableBinding {
 
 	public ReferenceBinding declaringRecord;
+
+	// When applying @NNBD to this component, let's remember the explicit type before applying the default.
+	TypeBinding explicitType;
 
 	public RecordComponentBinding(ReferenceBinding declaringRecord, RecordComponent declaration, TypeBinding type, int modifiers) {
 		super(declaration.name, type, modifiers,  null);
@@ -98,18 +101,16 @@ public class RecordComponentBinding extends VariableBinding {
 	}
 
 	@Override
+	public void fillInDefaultNonNullness(AbstractVariableDeclaration sourceField, Scope scope) {
+		this.explicitType = this.type;
+		super.fillInDefaultNonNullness(sourceField, scope);
+	}
+
+	@Override
 	public ReferenceBinding getDeclaringClass() {
 		return this.declaringRecord;
 	}
 
-	public final boolean isDeprecated() {
-		return (this.modifiers & ClassFileConstants.AccDeprecated) != 0;
-	}
-
-	// TODO: check
-	public final boolean isPublic() {
-		return (this.modifiers & ClassFileConstants.AccPublic) != 0;
-	}
 	/**
 	 * Returns the original RecordComponent (as opposed to parameterized instances)
 	 */

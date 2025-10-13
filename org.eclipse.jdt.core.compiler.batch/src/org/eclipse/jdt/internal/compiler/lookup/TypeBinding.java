@@ -289,6 +289,10 @@ public int depth() {
 	return 0;
 }
 
+public int typeArgumentDepth() {
+	return 1;
+}
+
 /* Answer the receiver's enclosing method ... null if the receiver is not a local type.
  */
 public MethodBinding enclosingMethod() {
@@ -1390,8 +1394,6 @@ public boolean isTypeArgumentContainedBy(TypeBinding otherType) {
 						for (TypeBinding intersectingType : intersectingTypes)
 							if (TypeBinding.equalsEquals(intersectingType, this))
 								return true;
-					} else if (otherBound instanceof CaptureBinding capture) {
-						otherBound = InferenceContext18.maybeUncapture(capture); // not backed by JLS
 					}
 					if (TypeBinding.equalsEquals(otherBound, this))
 						return true; // ? extends T  <=  ? extends ? extends T
@@ -1555,7 +1557,7 @@ public boolean needsUncheckedConversion(TypeBinding targetType) {
 	if (TypeBinding.equalsEquals(this, targetType))
 		return false;
 	targetType = targetType.leafComponentType();
-	if (!(targetType instanceof ReferenceBinding))
+	if (!(targetType instanceof ParameterizedTypeBinding))
 		return false;
 
 	TypeBinding currentType = leafComponentType();

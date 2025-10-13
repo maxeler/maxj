@@ -9798,4 +9798,76 @@ public class SwitchPatternTest extends AbstractRegressionTest9 {
 			"The final local variable i cannot be assigned, since it is defined in an enclosing type\n" +
 			"----------\n");
 	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3465
+	// [Enhanced Switch] Bug 575652 - [17][codegen][switch pattern] Unnecessary casts in switch
+	public void testIssue3465() throws Exception {
+		runConformTest(
+			new String[] {
+				"X.java",
+				"""
+				import static java.util.stream.IntStream.rangeClosed;
+
+				public interface X {
+				  static String fizzbuzz(int i) {
+				    return switch((Integer) i) {
+				      case Integer v when v % 15 == 0 -> "FizzBuzz";
+				      case Integer v when v % 5 == 0 -> "Buzz";
+				      case Integer v when v % 3 == 0 -> "Fizz";
+				      case Integer v -> "" + v;
+				    };
+				  }
+
+				  static void main(String[] args) {
+				    rangeClosed(1, 100).mapToObj(i -> fizzbuzz(i)).forEach(System.out::println);
+				  }
+				}
+				"""
+			},
+			"1\n" + "2\n" + "Fizz\n" + "4\n" + "Buzz\n" + "Fizz\n" + "7\n" + "8\n" + "Fizz\n" + "Buzz\n" +
+			"11\n" + "Fizz\n" + "13\n" + "14\n" + "FizzBuzz\n" + "16\n" + "17\n" + "Fizz\n" + "19\n" + "Buzz\n" +
+			"Fizz\n" + "22\n" + "23\n" + "Fizz\n" + "Buzz\n" + "26\n" + "Fizz\n" + "28\n" + "29\n" + "FizzBuzz\n" +
+			"31\n" + "32\n" + "Fizz\n" + "34\n" + "Buzz\n" + "Fizz\n" + "37\n" + "38\n" + "Fizz\n" + "Buzz\n" +
+			"41\n" + "Fizz\n" + "43\n" + "44\n" + "FizzBuzz\n" + "46\n" + "47\n" + "Fizz\n" + "49\n" + "Buzz\n" +
+			"Fizz\n" + "52\n" + "53\n" + "Fizz\n" + "Buzz\n" + "56\n" + "Fizz\n" + "58\n" + "59\n" + "FizzBuzz\n" +
+			"61\n" + "62\n" + "Fizz\n" + "64\n" + "Buzz\n" + "Fizz\n" + "67\n" + "68\n" + "Fizz\n" + "Buzz\n" +
+			"71\n" + "Fizz\n" + "73\n" + "74\n" + "FizzBuzz\n" + "76\n" + "77\n" + "Fizz\n" + "79\n" + "Buzz\n" +
+			"Fizz\n" + "82\n" + "83\n" + "Fizz\n" + "Buzz\n" + "86\n" + "Fizz\n" + "88\n" + "89\n" + "FizzBuzz\n" +
+			"91\n" + "92\n" + "Fizz\n" + "94\n" + "Buzz\n" + "Fizz\n" + "97\n" + "98\n" + "Fizz\n" + "Buzz");
+		String expectedOutput = "public static java.lang.String fizzbuzz(int i);\n";
+		String unexpectedOutput = "checkcast";
+		verifyClassFile(expectedOutput, unexpectedOutput, "X.class", ClassFileBytesDisassembler.SYSTEM);
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4256
+	// [Enhanced switch] ECJ allows case null to be followed by a constant where only default is legal
+	public void testIssue4256() throws Exception {
+		runNegativeTest(
+			new String[] {
+				"X.java",
+				"""
+				public class X {
+
+				  public static enum Any {
+				    One, Two, Three;
+				  }
+
+				  public static void main(final String[] args) {
+				    final Any any = Any.Three;
+				    switch (any) {
+				      case One -> System.out.println("ONE");
+				      case Two -> System.out.println("TWO");
+				      case null, Three -> System.out.println("THREE");
+				    }
+				  }
+				}
+				"""
+			},
+			"----------\n" +
+			"1. ERROR in X.java (at line 12)\n" +
+			"	case null, Three -> System.out.println(\"THREE\");\n" +
+			"	           ^^^^^\n" +
+			"A null case label has to be either the only expression in a case label or the first expression followed only by a default\n" +
+			"----------\n");
+	}
 }

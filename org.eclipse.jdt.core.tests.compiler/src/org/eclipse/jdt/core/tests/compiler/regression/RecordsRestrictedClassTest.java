@@ -1797,7 +1797,7 @@ public void testBug559281_001() {
 			"1. ERROR in X.java (at line 1)\n" +
 			"	record X(void k) {}\n" +
 			"	              ^\n" +
-			"void is an invalid type for the component k of a record\n" +
+			"void is an invalid type for the variable k\n" +
 			"----------\n");
 }
 public void testBug559281_002() {
@@ -8448,7 +8448,9 @@ public void testBugLazyCanon_006() throws IOException, ClassFormatException {
 	"100");
 }
 // Disabled waiting for https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3347
-public void _testBug571765_001() {
+public void testBug571765_001() {
+	if (this.complianceLevel < ClassFileConstants.JDK24)
+		return;
 	this.runNegativeTest(
 			new String[] {
 					"module-info.java",
@@ -10522,5 +10524,415 @@ public void testIssue4025() {
 	            },
 
 		"Ok!");
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4094
+// Error on Eclipse 4.36 when compiling Record with field usage
+public void testIssue4094() {
+	this.runConformTest(
+		new String[] {
+					"X.java",
+					"""
+					public class X {
+					    public static void main(String [] args) {
+					        System.out.println(ClassB.B);
+					    }
+					}
+					""",
+					"ClassB.java",
+					"""
+					import java.util.List;
+					import java.util.function.Predicate;
+
+
+					public class ClassB {
+
+					  private final Predicate<RecordA> predicate;
+
+					  public static final ClassB B = new ClassB(recordA -> recordA.test.isEmpty());
+
+					  public ClassB(Predicate<RecordA> predicate) {
+					    this.predicate = predicate;
+					  }
+
+					  public String toString() {
+					  	  return "ClassB instance";
+					  }
+
+					  record RecordA(List<Object> test, Integer i) {
+					  }
+					}
+					"""
+	            },
+
+		"ClassB instance");
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4106
+// @Override-annotation on records not correctly handled by Eclipse 4.36
+public void testIssue4106() {
+	Map<String, String> customOptions = getCompilerOptions();
+	customOptions.put(
+			CompilerOptions.OPTION_ReportMissingOverrideAnnotation,
+			CompilerOptions.ERROR);
+
+	this.runNegativeTest(
+			true,
+ 		new String[] {
+					"X.java",
+					"""
+					public record X(String withoutOverride, String withOverride) {
+
+					  public String withoutOverride() {
+					    return withoutOverride;
+					  }
+
+					  @Override
+					  public String withOverride() {
+					    return withOverride;
+					  }
+					}
+					""",
+	            },
+	null, customOptions,
+	"----------\n" +
+	"1. ERROR in X.java (at line 3)\n" +
+	"	public String withoutOverride() {\n" +
+	"	              ^^^^^^^^^^^^^^^^^\n" +
+	"The component accessor method withoutOverride() of record class X should be tagged with @Override\n" +
+	"----------\n",
+	JavacTestOptions.SKIP);
+}
+
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4118
+// Record with compact ctor - Internal compiler error: java.lang.RuntimeException: Internal Error compiling
+public void testIssue4118() {
+	this.runConformTest(
+		new String[] {
+					"RecordCompactWithReader.java",
+					"""
+					import java.io.Reader;
+					import java.time.Instant;
+					import java.util.Objects;
+
+					public record RecordCompactWithReader(Instant modified, Reader reader) {
+					    public RecordCompactWithReader {
+					        Objects.requireNonNull(modified);
+					        Objects.requireNonNull(reader);
+					    }
+					    public static void main(String [] args) {
+					    	System.out.println("OK!");
+					    }
+					}
+					""",
+	            },
+		"OK!"
+		);
+}
+
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4070
+// Resource closure analysis triggers NPE with compact constructors
+public void testIssue4070() {
+	this.runConformTest(
+		new String[] {
+					"Config.java",
+					"""
+					import java.net.URI;
+					import java.net.http.HttpClient;
+					import java.util.Objects;
+
+					public record Config(HttpClient httpClient, URI base, String defaultContentType) {
+
+						  @SuppressWarnings("resource")
+						  public Config {
+						    Objects.requireNonNull(httpClient, "httpClient");
+						  }
+
+						  public static void main(String [] args) {
+					    	System.out.println("OK!");
+					    }
+					}
+					""",
+	            },
+		"OK!"
+		);
+}
+
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4146
+// Unable to build Record
+public void testIssue4146() {
+	this.runNegativeTest(
+		new String[] {
+					"Segment.java",
+					"""
+					package repro;
+
+					import com.fasterxml.jackson.annotation.JsonInclude;
+					import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+
+					public record Segment(@JacksonXmlProperty(isAttribute = true) String id,
+					                      String source,
+					                      @JsonInclude(JsonInclude.Include.NON_NULL) String target) {
+
+					}
+					""",
+	            },
+		"----------\n" +
+		"1. ERROR in Segment.java (at line 3)\r\n" +
+		"	import com.fasterxml.jackson.annotation.JsonInclude;\r\n" +
+		"	       ^^^^^^^^^^^^^\n" +
+		"The import com.fasterxml cannot be resolved\n" +
+		"----------\n" +
+		"2. ERROR in Segment.java (at line 4)\r\n" +
+		"	import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;\r\n" +
+		"	       ^^^^^^^^^^^^^\n" +
+		"The import com.fasterxml cannot be resolved\n" +
+		"----------\n" +
+		"3. ERROR in Segment.java (at line 6)\r\n" +
+		"	public record Segment(@JacksonXmlProperty(isAttribute = true) String id,\r\n" +
+		"	                       ^^^^^^^^^^^^^^^^^^\n" +
+		"JacksonXmlProperty cannot be resolved to a type\n" +
+		"----------\n" +
+		"4. ERROR in Segment.java (at line 8)\r\n" +
+		"	@JsonInclude(JsonInclude.Include.NON_NULL) String target) {\r\n" +
+		"	 ^^^^^^^^^^^\n" +
+		"JsonInclude cannot be resolved to a type\n" +
+		"----------\n" +
+		"5. ERROR in Segment.java (at line 8)\r\n" +
+		"	@JsonInclude(JsonInclude.Include.NON_NULL) String target) {\r\n" +
+		"	             ^^^^^^^^^^^\n" +
+		"JsonInclude cannot be resolved to a variable\n" +
+		"----------\n");
+}
+
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4146
+// Unable to build Record
+public void testIssue4146_2() {
+	this.runNegativeTest(
+		new String[] {
+					"Segment.java",
+					"""
+					package repro;
+
+					import com.fasterxml.jackson.annotation.JsonInclude;
+					import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+
+					public record Segment(@JacksonXmlProperty(isAttribute = true) String id,
+					                      @JsonInclude(JsonInclude.Include.NON_NULL) String target,
+					                      String source) {
+
+					}
+					""",
+	            },
+		"----------\n" +
+		"1. ERROR in Segment.java (at line 3)\n" +
+		"	import com.fasterxml.jackson.annotation.JsonInclude;\n" +
+		"	       ^^^^^^^^^^^^^\n" +
+		"The import com.fasterxml cannot be resolved\n" +
+		"----------\n" +
+		"2. ERROR in Segment.java (at line 4)\n" +
+		"	import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;\n" +
+		"	       ^^^^^^^^^^^^^\n" +
+		"The import com.fasterxml cannot be resolved\n" +
+		"----------\n" +
+		"3. ERROR in Segment.java (at line 6)\n" +
+		"	public record Segment(@JacksonXmlProperty(isAttribute = true) String id,\n" +
+		"	                       ^^^^^^^^^^^^^^^^^^\n" +
+		"JacksonXmlProperty cannot be resolved to a type\n" +
+		"----------\n" +
+		"4. ERROR in Segment.java (at line 7)\n" +
+		"	@JsonInclude(JsonInclude.Include.NON_NULL) String target,\n" +
+		"	 ^^^^^^^^^^^\n" +
+		"JsonInclude cannot be resolved to a type\n" +
+		"----------\n" +
+		"5. ERROR in Segment.java (at line 7)\n" +
+		"	@JsonInclude(JsonInclude.Include.NON_NULL) String target,\n" +
+		"	             ^^^^^^^^^^^\n" +
+		"JsonInclude cannot be resolved to a variable\n" +
+		"----------\n");
+}
+
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4146
+// Unable to build Record
+public void testIssue4146_3() throws Exception {
+	this.runConformTest(
+		new String[] {
+					"Segment.java",
+					"""
+					import jackson.stuff.JacksonXmlProperty;
+					import jackson.stuff.JsonInclude;
+
+					public record Segment(@JacksonXmlProperty(isAttribute = true) String id,
+					                      String source,
+					                      @JsonInclude(JsonInclude.Include.NON_NULL) String target) {
+
+						public static void main(String [] args) {
+							System.out.println("OK!");
+						}
+					}
+					""",
+					"jackson/stuff/JacksonXmlProperty.java",
+					"""
+					package jackson.stuff;
+					import java.lang.annotation.ElementType;
+					import java.lang.annotation.Retention;
+					import java.lang.annotation.RetentionPolicy;
+					import java.lang.annotation.Target;
+
+					@Target({ElementType.ANNOTATION_TYPE, ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER})
+					@Retention(RetentionPolicy.RUNTIME)
+					public @interface JacksonXmlProperty {
+					    boolean isAttribute() default false;
+					}
+					""",
+					"jackson/stuff/JsonInclude.java",
+					"""
+					package jackson.stuff;
+
+					import java.lang.annotation.ElementType;
+					import java.lang.annotation.Target;
+
+					@Target({ElementType.METHOD, ElementType.FIELD, ElementType.TYPE, ElementType.PARAMETER})
+					@JacksonAnnotation
+					public @interface JsonInclude {
+					    public enum Include {
+					    	ALWAYS,
+					        NON_NULL;
+					    }
+					    public Include value() default Include.ALWAYS;
+					}
+					""",
+					"jackson/stuff/JacksonAnnotation.java",
+					"""
+					package jackson.stuff;
+
+					import java.lang.annotation.ElementType;
+					import java.lang.annotation.Retention;
+					import java.lang.annotation.RetentionPolicy;
+					import java.lang.annotation.Target;
+
+					@Target({ElementType.ANNOTATION_TYPE})
+					@Retention(RetentionPolicy.RUNTIME)
+					public @interface JacksonAnnotation {
+
+					}
+					"""
+	            },
+				"OK!");
+
+	String expectedOutput =
+					"  // Field descriptor #6 Ljava/lang/String;\n" +
+					"  private final java.lang.String id;\n" +
+					"    RuntimeVisibleAnnotations: \n" +
+					"      #8 @jackson.stuff.JacksonXmlProperty(\n" +
+					"        #9 isAttribute=true (constant type)\n" +
+					"      )\n" +
+					"  \n" +
+					"  // Field descriptor #6 Ljava/lang/String;\n" +
+					"  private final java.lang.String source;\n" +
+					"  \n" +
+					"  // Field descriptor #6 Ljava/lang/String;\n" +
+					"  private final java.lang.String target;\n" +
+					"    RuntimeInvisibleAnnotations: \n" +
+					"      #14 @jackson.stuff.JsonInclude(\n" +
+					"        #15 value=jackson.stuff.JsonInclude.Include.NON_NULL(enum type #16.#17)\n" +
+					"      )\n";
+	verifyClassFile(expectedOutput, "Segment.class", ClassFileBytesDisassembler.SYSTEM);
+
+	expectedOutput =
+			"  // Method descriptor #39 ()Ljava/lang/String;\n" +
+			"  // Stack: 1, Locals: 1\n" +
+			"  public java.lang.String id();\n" +
+			"    0  aload_0 [this]\n" +
+			"    1  getfield Segment.id : java.lang.String [40]\n" +
+			"    4  areturn\n" +
+			"      Line numbers:\n" +
+			"        [pc: 0, line: 4]\n" +
+			"    RuntimeVisibleAnnotations: \n" +
+			"      #8 @jackson.stuff.JacksonXmlProperty(\n" +
+			"        #9 isAttribute=true (constant type)\n" +
+			"      )\n" +
+			"  \n" +
+			"  // Method descriptor #39 ()Ljava/lang/String;\n" +
+			"  // Stack: 1, Locals: 1\n" +
+			"  public java.lang.String source();\n" +
+			"    0  aload_0 [this]\n" +
+			"    1  getfield Segment.source : java.lang.String [42]\n" +
+			"    4  areturn\n" +
+			"      Line numbers:\n" +
+			"        [pc: 0, line: 5]\n" +
+			"  \n" +
+			"  // Method descriptor #39 ()Ljava/lang/String;\n" +
+			"  // Stack: 1, Locals: 1\n" +
+			"  public java.lang.String target();\n" +
+			"    0  aload_0 [this]\n" +
+			"    1  getfield Segment.target : java.lang.String [44]\n" +
+			"    4  areturn\n" +
+			"      Line numbers:\n" +
+			"        [pc: 0, line: 6]\n" +
+			"    RuntimeInvisibleAnnotations: \n" +
+			"      #14 @jackson.stuff.JsonInclude(\n" +
+			"        #15 value=jackson.stuff.JsonInclude.Include.NON_NULL(enum type #16.#17)\n" +
+			"      )\n" +
+			"  \n";
+	verifyClassFile(expectedOutput, "Segment.class", ClassFileBytesDisassembler.SYSTEM);
+
+	expectedOutput =
+			"  // Method descriptor #61 (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V\n" +
+			"  // Stack: 2, Locals: 4\n" +
+			"  public Segment(java.lang.String id, java.lang.String source, java.lang.String target);\n" +
+			"     0  aload_0 [this]\n" +
+			"     1  invokespecial java.lang.Record() [64]\n" +
+			"     4  aload_0 [this]\n" +
+			"     5  aload_1 [id]\n" +
+			"     6  putfield Segment.id : java.lang.String [40]\n" +
+			"     9  aload_0 [this]\n" +
+			"    10  aload_2 [source]\n" +
+			"    11  putfield Segment.source : java.lang.String [42]\n" +
+			"    14  aload_0 [this]\n" +
+			"    15  aload_3 [target]\n" +
+			"    16  putfield Segment.target : java.lang.String [44]\n" +
+			"    19  return\n" +
+			"      Line numbers:\n" +
+			"        [pc: 0, line: 1]\n" +
+			"      Method Parameters:\n" +
+			"        id\n" +
+			"        source\n" +
+			"        target\n" +
+			"    RuntimeVisibleParameterAnnotations: \n" +
+			"      Number of annotations for parameter 0: 1\n" +
+			"        #8 @jackson.stuff.JacksonXmlProperty(\n" +
+			"          #9 isAttribute=true (constant type)\n" +
+			"        )\n" +
+			"      Number of annotations for parameter 1: 0\n" +
+			"      Number of annotations for parameter 2: 0\n" +
+			"    RuntimeInvisibleParameterAnnotations: \n" +
+			"      Number of annotations for parameter 0: 0\n" +
+			"      Number of annotations for parameter 1: 0\n" +
+			"      Number of annotations for parameter 2: 1\n" +
+			"        #14 @jackson.stuff.JsonInclude(\n" +
+			"          #15 value=jackson.stuff.JsonInclude.Include.NON_NULL(enum type #16.#17)\n" +
+			"        )\n" +
+			"\n";
+	verifyClassFile(expectedOutput, "Segment.class", ClassFileBytesDisassembler.SYSTEM);
+
+}
+public void testIssue4290() throws Exception {
+	this.runConformTest(
+		new String[] {
+					"X.java",
+					"""
+					public class X {
+					    public Object a() {
+					        return new Object() {
+					            static record A(Object  a, Object b) {}
+					        };
+					    }
+					    public static void main(String[] args) {
+							System.out.println("OK");
+						}
+					}
+					""",
+	            },
+				"OK");
+
 }
 }

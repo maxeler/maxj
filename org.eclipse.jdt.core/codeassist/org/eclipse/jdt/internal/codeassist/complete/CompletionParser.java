@@ -697,6 +697,7 @@ protected void attachOrphanCompletionNode(){
 				//  if (a instanceof List l) { l.is| Object // https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2106
 				if (ifStatement.condition instanceof InstanceOfExpression iof && iof.pattern instanceof TypePattern pattern) {
 					this.currentElement.add(pattern.local, 0);
+					iof.pattern = null;
 				}
 				this.currentElement = this.currentElement.add(ifStatement, 0);
 			}
@@ -3043,15 +3044,14 @@ protected void consumeExitVariableWithInitialization() {
 		}
 	}
 
-	// does not keep the initialization if completion is not inside
+	// do not keep the initialization if completion is not inside, except for var typed local where initializer must be preserved for LVTI
 	AbstractVariableDeclaration variable = (AbstractVariableDeclaration) this.astStack[this.astPtr];
 	if (this.cursorLocation + 1 < variable.initialization.sourceStart ||
 		this.cursorLocation > variable.initialization.sourceEnd) {
-		if (!variable.type.isTypeNameVar(null)) {
-			if (! (variable instanceof LocalDeclaration && ((LocalDeclaration)variable).isTypeNameVar(this.compilationUnit.scope))) {
-				variable.initialization = null;
-			}
-		}
+
+		if (! (variable instanceof LocalDeclaration && variable.isVarTyped(this.compilationUnit.scope)))
+			variable.initialization = null;
+
 	} else if (this.assistNode != null && this.assistNode == variable.initialization) {
 			this.assistNodeParent = variable;
 	}

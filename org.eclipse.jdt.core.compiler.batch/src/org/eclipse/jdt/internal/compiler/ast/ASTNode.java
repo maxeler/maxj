@@ -159,6 +159,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 	public static final int IsForeachElementVariable = Bit5;
 	public static final int ShadowsOuterLocal = Bit22;
 	public static final int IsAdditionalDeclarator = Bit23;
+	public static final int IsPatternVariable = Bit24;
 
 	// for name refs or local decls
 	public static final int FirstAssignmentToLocal = Bit4;
@@ -199,6 +200,9 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 	// for type, method and field declarations
 	public static final int HasLocalType = Bit2; // cannot conflict with AddAssertionMASK
 	public static final int HasBeenResolved = Bit5; // field decl only (to handle forward references)
+
+	// for lambda expressions
+	public static final int ArgumentsTypeElided = Bit2; // A lambda with var typed arguments is considered to be type elided, but the Arguments themselves are considered var typed.
 
 	// for expression
 	public static final int ParenthesizedSHIFT = 21; // Bit22 -> Bit29
@@ -806,7 +810,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 				case Binding.FIELD :
 				case Binding.RECORD_COMPONENT :
 				case Binding.LOCAL :
-					if ((recipient.extendedTagBits & ExtendedTagBits.AnnotationResolved) != 0) return annotations;
+					if (ExtendedTagBits.areAllAnnotationsResolved(recipient.extendedTagBits)) return annotations;
 					recipient.extendedTagBits |= ExtendedTagBits.AllAnnotationsResolved;
 					if (length > 0) {
 						annotations = new AnnotationBinding[length];
@@ -845,7 +849,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 								annotations[j] = annot.getCompilerAnnotation();
 							}
 						}
-						break;
+						return annotations;
 					case Binding.LOCAL :
 						LocalVariableBinding local = (LocalVariableBinding) recipient;
 						// Note for JDK>=14, this could be LVB or RCB, hence typecasting to VB
@@ -863,7 +867,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 							}
 						} else if (annotations != null) {
 							// One of the annotations at least is a SuppressWarnings annotation
-							LocalDeclaration localDeclaration = local.declaration;
+							AbstractVariableDeclaration localDeclaration = local.declaration;
 							int declarationSourceEnd = localDeclaration.declarationSourceEnd;
 							int declarationSourceStart = localDeclaration.declarationSourceStart;
 							for (int j = 0; j < length; j++) {
@@ -886,9 +890,10 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 						// copy the se8 annotations.
 						if (annotationRecipient instanceof RecordComponentBinding && copySE8AnnotationsToType)
 							copySE8AnnotationsToType(scope, recipient, sourceAnnotations, false);
-						break;
+						return annotations;
+					default:
+						annotations[i] = annotation.compilerAnnotation;
 				}
-				return annotations;
 			} else {
 				annotation.recipient = recipient;
 				annotation.resolveType(scope);
@@ -1151,8 +1156,8 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 						recordComponent.bits |= HasTypeAnnotations;
 						recordComponent.type.bits |= HasTypeAnnotations;
 						recordComponentBinding.type = mergeAnnotationsIntoType(scope, se8Annotations, se8nullBits, se8NullAnnotation, recordComponent.type,
-								Binding.DefaultLocationField, recordComponentBinding.type);
-						if(scope.environment().usesNullTypeAnnotations()) { //TODO Bug 562478
+								Binding.DefaultLocationRecordComponent, recordComponentBinding.type);
+						if (scope.environment().usesNullTypeAnnotations()) { //TODO Bug 562478
 							recordComponentBinding.tagBits &= ~(se8nullBits);
 						}
 					}
@@ -1283,8 +1288,9 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 			}
 			oldLeafType = oldLeafType.withoutToplevelNullAnnotation();
 		} else if (se8nullBits == TagBits.AnnotationNonNull
-					&& location != Binding.DefaultLocationReturnType // normal return type cases are handled in MethodBinding.fillInDefaultNonNullness18()
-					&& location != Binding.DefaultLocationField      // normal field type cases are handled in FieldBinding.fillInDefaultNonNullness()
+					&& location != Binding.DefaultLocationReturnType      // normal return type cases are handled in MethodBinding.fillInDefaultNonNullness18()
+					&& location != Binding.DefaultLocationField           // normal field type cases are handled in VariableBinding.fillInDefaultNonNullness()
+					&& location != Binding.DefaultLocationRecordComponent // record component type cases are handled in VariableBinding.fillInDefaultNonNullness()
 					&& scope.hasDefaultNullnessForType(typeRef.resolvedType, location, typeRef.sourceStart)) {
 			scope.problemReporter().nullAnnotationIsRedundant(typeRef, new Annotation[] { se8NullAnnotation });
 		}
@@ -1332,6 +1338,8 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 										break;
 									}
 								}
+								annotations[i].recipient = recipient;
+								annotations[i].resolveType(scope); // allow downstream access to since & forRemoval
 							}
 							recipient.tagBits |= deprecationTagBits;
 						}
@@ -1349,7 +1357,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 			if (annotations != null) {
 				int length;
 				if ((length = annotations.length) >= 0) {
-					if ((recipient.tagBits & ExtendedTagBits.NullDefaultAnnotationResolved) != 0) return;
+					if ((recipient.extendedTagBits & ExtendedTagBits.NullDefaultAnnotationResolved) != 0) return;
 					for (int i = 0; i < length; i++) {
 						TypeReference annotationTypeRef = annotations[i].type;
 						// only resolve type name if 'NonNullByDefault' last token (or corresponding configured annotation name)

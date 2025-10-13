@@ -522,6 +522,11 @@ public abstract class Annotation extends Expression {
 					if (CharOperation.equals(name, TypeConstants.DEFAULT_LOCATION__ARRAY_CONTENTS))
 						return Binding.DefaultLocationArrayContents;
 					break;
+				case 16 :
+					if (CharOperation.equals(name, TypeConstants.DEFAULT_LOCATION__RECORD_COMPONENT))
+						return Binding.DefaultLocationRecordComponent;
+					break;
+
 			}
 		}
 		return 0;
@@ -564,6 +569,10 @@ public abstract class Annotation extends Expression {
 				case 9:
 					if (CharOperation.equals(name, TypeConstants.UPPER_PARAMETER))
 						return Binding.DefaultLocationParameter;
+					break;
+				case 16 :
+					if (CharOperation.equals(name, TypeConstants.UPPER_RECORD_COMPONENT))
+						return Binding.DefaultLocationRecordComponent;
 					break;
 			}
 		}
@@ -956,7 +965,19 @@ public abstract class Annotation extends Expression {
 		int defaultNullness = (int)(tagBits & Binding.NullnessDefaultMASK);
 		tagBits &= ~Binding.NullnessDefaultMASK;
 		CompilerOptions compilerOptions = scope.compilerOptions();
-		if ((tagBits & TagBits.AnnotationDeprecated) != 0 && compilerOptions.complianceLevel >= ClassFileConstants.JDK9 && !compilerOptions.storeAnnotations) {
+		/* In cases like this, the this.recipient is null
+		 * public @interface MyAnnot {
+		 *   Deprecated annot() default @Deprecated();
+		 * }
+		 * and difficult to distinguish between the above and
+		 * @Deprecated
+		 * Deprecated annot();
+		 *
+		 */
+		if (this.recipient != null
+				&& (tagBits & TagBits.AnnotationDeprecated) != 0
+				&& compilerOptions.complianceLevel >= ClassFileConstants.JDK9
+				&& !compilerOptions.storeAnnotations) {
 			this.recipient.setAnnotations(new AnnotationBinding[] {this.compilerAnnotation}, true); // force storing enhanced deprecation
 		}
 
@@ -1079,7 +1100,7 @@ public abstract class Annotation extends Expression {
 							variable.tagBits &= ~TagBits.AnnotationNullMASK; // avoid secondary problems
 						}
 						if ((tagBits & TagBits.AnnotationSuppressWarnings) != 0) {
-							LocalDeclaration localDeclaration = variable.declaration;
+							AbstractVariableDeclaration localDeclaration = variable.declaration;
 							recordSuppressWarnings(scope, localDeclaration.declarationSourceStart, localDeclaration.declarationSourceEnd, compilerOptions.suppressWarnings);
 						}
 						// note: defaultNullness for local declarations has been already been handled earlier by handleNonNullByDefault()
@@ -1208,8 +1229,7 @@ public abstract class Annotation extends Expression {
 				}
 				break;
 			case Binding.RECORD_COMPONENT :
-				/* JLS 14 9.7.4 Record Preview
-				 * It is a compile-time error if an annotation of type T is syntactically a modifier for:
+				/* It is a compile-time error if an annotation of type T is syntactically a modifier for:
 				 * ...
 				 * a record component but T is not applicable to record component declarations, field declarations,
 				 * method declarations, or type contexts.
@@ -1217,7 +1237,7 @@ public abstract class Annotation extends Expression {
 				long recordComponentMask = TagBits.AnnotationForRecordComponent |
 				TagBits.AnnotationForField |
 				TagBits.AnnotationForMethod |
-				TagBits.AnnotationForParameter | // See JLS 14 8.10.4 Records Preview - TODO revisit in J15
+				TagBits.AnnotationForParameter |
 				TagBits.AnnotationForTypeUse;
 				return (metaTagBits & recordComponentMask) != 0 ? AnnotationTargetAllowed.YES :
 					AnnotationTargetAllowed.NO;
@@ -1236,7 +1256,7 @@ public abstract class Annotation extends Expression {
 				} else if ((annotationType.tagBits & TagBits.AnnotationForLocalVariable) != 0) {
 					return AnnotationTargetAllowed.YES;
 				} else if ((metaTagBits & TagBits.AnnotationForTypeUse) != 0) {
-					if (localVariableBinding.declaration.isTypeNameVar(scope)) {
+					if (localVariableBinding.declaration.isVarTyped(scope)) {
 						return AnnotationTargetAllowed.NO;
 					} else if (isTypeUseCompatible(localVariableBinding.declaration.type, scope)) {
 						return AnnotationTargetAllowed.YES;

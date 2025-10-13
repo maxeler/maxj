@@ -422,51 +422,12 @@ public abstract class Scope {
 				if (isMalformedPair(iType, jType, scope)) {
 					return null;
 				}
-				if (iType.isCompatibleWith(jType, scope)) { // if Vi <: Vj, Vj is removed
+				if (iType.isSubtypeOf(jType, false)) { // if Vi <: Vj, Vj is removed
 					if (result == types) { // defensive copy
 						System.arraycopy(result, 0, result = new TypeBinding[length], 0, length);
 					}
 					result[j] = null;
 					removed ++;
-				} else if (!jType.isCompatibleWith(iType, scope)) {
-					// avoid creating unsatisfiable intersection types (see https://bugs.eclipse.org/405706):
-					if (iType.isParameterizedType() && jType.isParameterizedType()) {
-						// if the wider of the two types (judged by originals) has type variables
-						// substitute those with their upper bounds and re-check (see https://bugs.eclipse.org/413958):
-						ParameterizedTypeBinding wideType, narrowType;
-						if (iType.original().isCompatibleWith(jType.original(), scope)) {
-							wideType = (ParameterizedTypeBinding) jType;
-							narrowType = (ParameterizedTypeBinding) iType;
-						} else if (jType.original().isCompatibleWith(iType.original(), scope)) {
-							wideType = (ParameterizedTypeBinding) iType;
-							narrowType = (ParameterizedTypeBinding) jType;
-						} else {
-							continue;
-						}
-						if (wideType.arguments == null)
-							continue; // assume we already have an error here
-						// Skip the following check if inference variables or CaptureBinding18 are involved,
-						// hopefully during inference a contradictory glb will simply not produce a solution
-						// (should essentially be detected beforehand in CaptureBinding18.setUpperBounds()):
-						if (!narrowType.isProperType(false) || !wideType.isProperType(false))
-							continue;
-						int numTypeArgs = wideType.arguments.length;
-						TypeBinding[] bounds = new TypeBinding[numTypeArgs];
-						for (int k = 0; k < numTypeArgs; k++) {
-							TypeBinding argument = wideType.arguments[k];
-							bounds[k] = argument.isTypeVariable() ? ((TypeVariableBinding)argument).upperBound() : argument;
-						}
-						ReferenceBinding wideOriginal = (ReferenceBinding) wideType.original();
-						TypeBinding substitutedWideType =
-								environment.createParameterizedType(wideOriginal, bounds, wideOriginal.enclosingType());
-						// if the narrow type is compatible with the substituted wide type, we keep silent,
-						// substituting type variables with proper types can still satisfy all constraints,
-						// otherwise ...
-						if (!narrowType.isCompatibleWith(substitutedWideType, scope)) {
-							// ... parameterized types are incompatible due to incompatible type arguments => unsatisfiable
-							return null;
-						}
-					}
 				}
 			}
 		}
@@ -497,23 +458,41 @@ public abstract class Scope {
 	}
 
 	static boolean isMalformedPair(TypeBinding t1, TypeBinding t2, Scope scope) {
-		// not spec-ed in JLS, but per email communication (2017-09-13) it should be
-		switch (t1.kind()) {
-			case Binding.TYPE:
-			case Binding.GENERIC_TYPE:
-			case Binding.PARAMETERIZED_TYPE:
-			case Binding.RAW_TYPE:
-				if (t1.isClass()) {
-					if (t2.getClass() == TypeVariableBinding.class) {
-						TypeBinding bound = ((TypeVariableBinding) t2).firstBound;
-						if (bound == null || !bound.erasure().isCompatibleWith(t1.erasure())) { // use of erasure is heuristic-based
-							return true; // malformed, because substitution could create a contradiction.
-						}
-					}
-				}
+		// this is a combination from JLS 4.9 and private email communication (2017-09-13):
+		InferenceVariable iv1 = t1 instanceof InferenceVariable iv ? iv : null;
+		InferenceVariable iv2 = t2 instanceof InferenceVariable iv ? iv : null;
+		TypeVariableBinding tv1 = getTypeVariable(iv1 != null ? iv1.typeParameter : t1);
+		TypeVariableBinding tv2 = getTypeVariable(iv2 != null ? iv2.typeParameter : t2);
+		if (tv1 != null) {
+			if (tv2 != null)
+				return iv1 == null && iv2 == null; // two real type variables
+			return isTypeVariableClassConflict(tv1, iv1 != null, t2);
+		} else if (tv2 != null) {
+			return isTypeVariableClassConflict(tv2, iv2 != null, t1);
 		}
 		return false;
 	}
+
+	private static TypeVariableBinding getTypeVariable(TypeBinding type) {
+		if (type.getClass() == TypeVariableBinding.class) // exact type only
+			return ((TypeVariableBinding) type);
+		return null;
+	}
+
+	private static boolean isTypeVariableClassConflict(TypeVariableBinding typeVariable, boolean fromInferenceVariable, TypeBinding otherType) {
+		if (otherType.isClass()) {
+			TypeBinding classErasure = otherType.erasure();
+			if (classErasure.id != TypeIds.T_JavaLangObject) {
+				TypeBinding bound1 = typeVariable.firstBound;
+				if (bound1 == null) {
+					return !fromInferenceVariable;
+				} else if (!bound1.erasure().isCompatibleWith(classErasure))  // use of erasure is heuristic-based
+					return true;
+			}
+		}
+		return false;
+	}
+
 	/**
 	 * Returns an array of types, where original types got substituted given a substitution.
 	 * Only allocate an array if anything is different.
@@ -801,16 +780,6 @@ public abstract class Scope {
 	 * in case the method was originally compatible, then simply answer it back.
 	 */
 	protected final MethodBinding computeCompatibleMethod(MethodBinding method, TypeBinding[] arguments, InvocationSite invocationSite) {
-		return computeCompatibleMethod(method, arguments, invocationSite, false);
-	}
-	/**
-	 * Internal use only
-	 * Given a method, returns null if arguments cannot be converted to parameters.
-	 * Will answer a substituted method in case the method was generic and type inference got triggered;
-	 * in case the method was originally compatible, then simply answer it back.
-	 */
-	protected final MethodBinding computeCompatibleMethod(MethodBinding method, TypeBinding[] arguments, InvocationSite invocationSite, boolean tiebreakingVarargsMethods)
-	{
 		TypeBinding[] genericTypeArguments = invocationSite.genericTypeArguments();
 		TypeBinding[] parameters = method.parameters;
 		TypeVariableBinding[] typeVariables = method.typeVariables;
@@ -861,7 +830,7 @@ public abstract class Scope {
 			}
 		}
 
-		int level = parameterCompatibilityLevel(method, arguments, tiebreakingVarargsMethods);
+		int level = parameterCompatibilityLevel(method, arguments, invocationSite);
 		if (level > NOT_COMPATIBLE) {
 			if (method.hasPolymorphicSignature(this)) {
 				// generate polymorphic method and set polymorphic tagbits as well
@@ -1141,15 +1110,6 @@ public abstract class Scope {
 		}
 	}
 
-	public final ClassScope enclosingTopMostClassScope() {
-		Scope scope = this;
-		while (scope != null) {
-			Scope t = scope.parent;
-			if (t instanceof CompilationUnitScope) break;
-			scope = t;
-		}
-		return scope instanceof ClassScope ? ((ClassScope) scope) : null;
-	}
 	public final MethodScope enclosingMethodScope() {
 		Scope scope = this;
 		while ((scope = scope.parent) != null) {
@@ -1684,6 +1644,9 @@ public abstract class Scope {
 		// superclass lookup
 		ReferenceBinding classHierarchyStart = currentType;
 		MethodVerifier verifier = environment().methodVerifier();
+		boolean currentIsSuper = false;
+		MethodBinding singlePrivateMethod = null;
+		boolean multiplePrivateMethods = false;
 		while (currentType != null) {
 			unitScope.recordTypeReference(currentType);
 			currentType = (ReferenceBinding) currentType.capture(this, invocationSite == null ? 0 : invocationSite.sourceStart(), invocationSite == null ? 0 : invocationSite.sourceEnd());
@@ -1721,18 +1684,29 @@ public abstract class Scope {
 				}
 
 				if (currentLength > 0) {
-					// append currentMethods, filtering out null entries
-					if (currentMethods.length == currentLength) {
+					// append currentMethods, filtering out null entries and private super methods
+					if (currentMethods.length == currentLength && !currentIsSuper) {
 						found.addAll(currentMethods);
 					} else {
 						for (MethodBinding currentMethod : currentMethods) {
-							if (currentMethod != null)
-								found.add(currentMethod);
+							if (currentMethod != null) {
+								if (currentIsSuper && currentMethod.isPrivate()) {
+									if (singlePrivateMethod == null && !multiplePrivateMethods) {
+										singlePrivateMethod = currentMethod;
+									} else {
+										singlePrivateMethod = null;
+										multiplePrivateMethods = true;
+									}
+								} else {
+									found.add(currentMethod);
+								}
+							}
 						}
 					}
 				}
 			}
 			currentType = currentType.superclass();
+			currentIsSuper = true;
 		}
 
 		// if found several candidates, then eliminate those not matching argument types
@@ -1773,6 +1747,7 @@ public abstract class Scope {
 						return problemMethod;
 				}
 			}
+
 			// abstract classes may get a match in interfaces; for non abstract
 			// classes, reduces secondary errors since missing interface method
 			// error is already reported
@@ -1792,7 +1767,13 @@ public abstract class Scope {
 				}
 				return interfaceMethod;
 			}
-			if (found.size == 0) return null;
+			if (found.size == 0) {
+				if (singlePrivateMethod != null) {
+					// if there is only one private method, we want to report that it is not visible.
+					return new ProblemMethodBinding(singlePrivateMethod, selector, singlePrivateMethod.parameters, ProblemReasons.NotVisible);
+				}
+				return null;
+			}
 			if (problemMethod != null) return problemMethod;
 
 			// still no match; try to find a close match when the parameter
@@ -3773,76 +3754,6 @@ public abstract class Scope {
 		return null;
 	}
 
-	// Tie break IS running to determine the most specific method binding.
-	protected boolean isAcceptableMethod(MethodBinding one, MethodBinding two) {
-		TypeBinding[] oneParams = one.parameters;
-		TypeBinding[] twoParams = two.parameters;
-		int oneParamsLength = oneParams.length;
-		int twoParamsLength = twoParams.length;
-		if (oneParamsLength == twoParamsLength) {
-			/* Below 1.5, discard any generics we have left in for the method verifier's benefit, (so it
-			   can detect method overriding properly in the presence of generic super types.) This is so
-			   as to allow us to determine whether we have been handed an acceptable method in 1.4 terms
-			   without all the 1.5isms below kicking in and spoiling the party.
-			   See https://bugs.eclipse.org/bugs/show_bug.cgi?id=331446
-			*/
-			next : for (int i = 0; i < oneParamsLength; i++) {
-				TypeBinding oneParam = oneParams[i];
-				TypeBinding twoParam = twoParams[i];
-				if (TypeBinding.equalsEquals(oneParam, twoParam) || oneParam.isCompatibleWith(twoParam)) {
-					if (two.declaringClass.isRawType()) continue next;
-
-					TypeBinding leafComponentType = two.original().parameters[i].leafComponentType();
-					TypeBinding originalTwoParam = leafComponentType;
-					switch (originalTwoParam.kind()) {
-					   	case Binding.TYPE_PARAMETER :
-					   		if (((TypeVariableBinding) originalTwoParam).hasOnlyRawBounds())
-						   		continue next;
-					   		//$FALL-THROUGH$
-					   	case Binding.WILDCARD_TYPE :
-					   	case Binding.INTERSECTION_TYPE:
-					   	case Binding.PARAMETERIZED_TYPE :
-							TypeBinding originalOneParam = one.original().parameters[i].leafComponentType();
-							switch (originalOneParam.kind()) {
-							   	case Binding.TYPE :
-							   	case Binding.GENERIC_TYPE :
-									TypeBinding inheritedTwoParam = oneParam.findSuperTypeOriginatingFrom(twoParam);
-									if (inheritedTwoParam == null || !inheritedTwoParam.leafComponentType().isRawType()) break;
-							   		return false;
-							   	case Binding.TYPE_PARAMETER :
-							   		if (!((TypeVariableBinding) originalOneParam).upperBound().isRawType()) break;
-							   		return false;
-							   	case Binding.RAW_TYPE:
-							   		// originalOneParam is RAW so it cannot be more specific than a wildcard or parameterized type
-							   		return false;
-							}
-					}
-				} else {
-					if (i == oneParamsLength - 1 && one.isVarargs() && two.isVarargs()) {
-						TypeBinding oType = ((ArrayBinding) oneParam).elementsType();
-						TypeBinding eType = ((ArrayBinding) twoParam).elementsType();
-						if (TypeBinding.equalsEquals(oType, eType) || oType.isCompatibleWith(eType)) {
-							return true; // special case to choose between 2 varargs methods when the last arg is Object[]
-						}
-					}
-					return false;
-				}
-			}
-			return true;
-		}
-
-		if (one.isVarargs() && two.isVarargs()) {
-			// check that each parameter before the vararg parameters are compatible (no autoboxing allowed here)
-			for (int i = (oneParamsLength > twoParamsLength ? twoParamsLength : oneParamsLength) - 2; i >= 0; i--)
-				if (TypeBinding.notEquals(oneParams[i], twoParams[i]) && !oneParams[i].isCompatibleWith(twoParams[i]))
-					return false;
-			if (parameterCompatibilityLevel(one, twoParams, true) == NOT_COMPATIBLE
-					&& parameterCompatibilityLevel(two, oneParams, true) == VARARGS_COMPATIBLE)
-				return true;
-		}
-		return false;
-	}
-
 	public boolean isBoxingCompatibleWith(TypeBinding expressionType, TypeBinding targetType) {
 		LookupEnvironment environment = environment();
 		if (expressionType.isBaseType() == targetType.isBaseType())
@@ -4612,7 +4523,7 @@ public abstract class Scope {
 		int[] compatibilityLevels = new int[visibleSize];
 		int compatibleCount = 0;
 		for (int i = 0; i < visibleSize; i++)
-			if ((compatibilityLevels[i] = parameterCompatibilityLevel(visible[i], argumentTypes, invocationSite)) != NOT_COMPATIBLE) {
+			if ((compatibilityLevels[i] = parameterCompatibilityLevelFromInference(visible[i], argumentTypes, invocationSite)) != NOT_COMPATIBLE) {
 				if (compatibilityLevels[i] == COMPATIBLE_IGNORING_MISSING_TYPE) {
 					// cannot conclusively select any candidate, use the method with missing types in the error message
 					return new ProblemMethodBinding(visible[i], visible[i].selector, visible[i].parameters, ProblemReasons.Ambiguous);
@@ -4887,14 +4798,14 @@ public abstract class Scope {
 	}
 
 	public final ClassScope outerMostClassScope() {
-		ClassScope lastClassScope = null;
+		ClassScope outerMostClassScope = null;
 		Scope scope = this;
 		do {
-			if (scope instanceof ClassScope)
-				lastClassScope = (ClassScope) scope;
+			if (scope instanceof ClassScope classScope)
+				outerMostClassScope = classScope;
 			scope = scope.parent;
 		} while (scope != null);
-		return lastClassScope; // may answer null if no class around
+		return outerMostClassScope; // may answer null if no class around
 	}
 
 	public final MethodScope outerMostMethodScope() {
@@ -4909,7 +4820,7 @@ public abstract class Scope {
 	}
 
 	// Version that just answers based on inference kind (at 1.8+) when available.
-	public int parameterCompatibilityLevel(MethodBinding method, TypeBinding[] arguments, InvocationSite site) {
+	public int parameterCompatibilityLevelFromInference(MethodBinding method, TypeBinding[] arguments, InvocationSite site) {
 		if (method.problemId() == ProblemReasons.InvocationTypeInferenceFailure) {
 			// we need to accept methods with InvocationTypeInferenceFailure, because logically overload resolution happens *before* invocation type inference
 			method = ((ProblemMethodBinding)method).closestMatch; // for compatibility checks use the actual method
@@ -4960,13 +4871,10 @@ public abstract class Scope {
 					break;
 				}
 		}
-		return parameterCompatibilityLevel(method, arguments, false);
+		return parameterCompatibilityLevel(method, arguments, site);
 	}
 
-	public int parameterCompatibilityLevel(MethodBinding method, TypeBinding[] arguments) {
-		return parameterCompatibilityLevel(method, arguments, false);
-	}
-	public int parameterCompatibilityLevel(MethodBinding method, TypeBinding[] arguments, boolean tiebreakingVarargsMethods) {
+	public int parameterCompatibilityLevel(MethodBinding method, TypeBinding[] arguments, InvocationSite site) {
 		TypeBinding[] parameters = method.parameters;
 		int paramLength = parameters.length;
 		int argLength = arguments.length;
@@ -4979,14 +4887,11 @@ public abstract class Scope {
 				TypeBinding param = parameters[lastIndex]; // is an ArrayBinding by definition
 				TypeBinding arg = arguments[lastIndex];
 				if (TypeBinding.notEquals(param, arg)) {
-					level = parameterCompatibilityLevel(arg, param, env, tiebreakingVarargsMethods, method);
+					level = parameterCompatibilityLevel(arg, param, env, method);
 					if (level == NOT_COMPATIBLE) {
 						// expect X[], is it called with X
 						param = ((ArrayBinding) param).elementsType();
-						if (tiebreakingVarargsMethods) {
-							arg = ((ArrayBinding) arg).elementsType();
-						}
-						if (parameterCompatibilityLevel(arg, param, env, tiebreakingVarargsMethods, method) == NOT_COMPATIBLE)
+						if (parameterCompatibilityLevel(arg, param, env, method) == NOT_COMPATIBLE)
 							return NOT_COMPATIBLE;
 						level = VARARGS_COMPATIBLE; // varargs support needed
 					}
@@ -4995,9 +4900,9 @@ public abstract class Scope {
 				if (paramLength < argLength) { // all remaining argument types must be compatible with the elementsType of varArgType
 					TypeBinding param = ((ArrayBinding) parameters[lastIndex]).elementsType();
 					for (int i = lastIndex; i < argLength; i++) {
-						TypeBinding arg = (tiebreakingVarargsMethods && (i == (argLength - 1))) ? ((ArrayBinding)arguments[i]).elementsType() : arguments[i];
+						TypeBinding arg = arguments[i];
 						if (TypeBinding.notEquals(param, arg)) {
-							level = parameterCompatibilityLevel(arg, param, env, tiebreakingVarargsMethods, method);
+							level = parameterCompatibilityLevel(arg, param, env, method);
 							if (level == NOT_COMPATIBLE)
 								return NOT_COMPATIBLE;
 						}
@@ -5014,9 +4919,19 @@ public abstract class Scope {
 		// now compare standard arguments from 0 to lastIndex
 		for (int i = 0; i < lastIndex; i++) {
 			TypeBinding param = parameters[i];
-			TypeBinding arg = (tiebreakingVarargsMethods && (i == (argLength - 1))) ? ((ArrayBinding)arguments[i]).elementsType() : arguments[i];
+			TypeBinding arg = arguments[i];
 			if (TypeBinding.notEquals(arg,param)) {
-				int newLevel = parameterCompatibilityLevel(arg, param, env, tiebreakingVarargsMethods, method);
+				if (site instanceof Invocation invocation) {
+					Expression[] invArgs = invocation.arguments();
+					int idx = i < invArgs.length ? i : invArgs.length - 1;
+					CapturingContext.enter(invArgs[idx].sourceStart, invArgs[idx].sourceEnd, this);
+				}
+				int newLevel;
+				try {
+					newLevel = parameterCompatibilityLevel(arg, param, env, method);
+				} finally {
+					CapturingContext.leave();
+				}
 				if (newLevel == NOT_COMPATIBLE) {
 					return NOT_COMPATIBLE;
 				} else if (newLevel == COMPATIBLE_IGNORING_MISSING_TYPE) {
@@ -5048,7 +4963,7 @@ public abstract class Scope {
 		return NOT_COMPATIBLE;
 	}
 
-	private int parameterCompatibilityLevel(TypeBinding arg, TypeBinding param, LookupEnvironment env, boolean tieBreakingVarargsMethods, MethodBinding method) {
+	private int parameterCompatibilityLevel(TypeBinding arg, TypeBinding param, LookupEnvironment env, MethodBinding method) {
 		// only called if env.options.sourceLevel >= ClassFileConstants.JDK1_5
 		if (arg == null || param == null)
 			return NOT_COMPATIBLE;
@@ -5059,15 +4974,6 @@ public abstract class Scope {
 				return COMPATIBLE;
 		} else if (arg.isCompatibleWith(param, this)) {
 			return COMPATIBLE;
-		}
-		if (tieBreakingVarargsMethods && !CompilerOptions.tolerateIllegalAmbiguousVarargsInvocation) {
-			/* 15.12.2.5 Choosing the Most Specific Method, ... One variable arity member method named m is more specific than
-			   another variable arity member method of the same name if either ... Only subtypes relationship should be used.
-			   Actually this is true even for fixed arity methods, but in practice is not an issue since we run the algorithm
-			   multiple times for each compatibility level.
-			   https://bugs.eclipse.org/bugs/show_bug.cgi?id=346038, https://bugs.eclipse.org/bugs/show_bug.cgi?id=346039.
-			*/
-			return NOT_COMPATIBLE;
 		}
 		if (arg.kind() == Binding.POLY_TYPE || (arg.isBaseType() != param.isBaseType())) {
 			TypeBinding convertedType = env.computeBoxingType(arg);

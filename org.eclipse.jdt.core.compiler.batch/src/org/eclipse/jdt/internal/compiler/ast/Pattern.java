@@ -30,7 +30,7 @@ public abstract class Pattern extends Expression {
 
 	boolean isTotalTypeNode = false;
 
-	private Pattern enclosingPattern;
+	private RecordPattern enclosingPattern;
 
 	protected MethodBinding accessorMethod;
 
@@ -58,7 +58,7 @@ public abstract class Pattern extends Expression {
 
 	record TestContextRecord(TypeBinding left, TypeBinding right, PrimitiveConversionRoute route) {}
 
-	public Pattern getEnclosingPattern() {
+	public RecordPattern getEnclosingPattern() {
 		return this.enclosingPattern;
 	}
 
@@ -110,21 +110,11 @@ public abstract class Pattern extends Expression {
 		return false;
 	}
 
-	// Given a non-null instance of same type, would the pattern always match ?
-	public boolean matchFailurePossible() {
-		return false;
-	}
-
 	public boolean isUnconditional(TypeBinding t, Scope scope) {
 		return false;
 	}
 
 	public abstract void generateCode(BlockScope currentScope, CodeStream codeStream, BranchLabel patternMatchLabel, BranchLabel matchFailLabel);
-
-	public void generateTestingConversion(BlockScope scope, CodeStream codeStream) {
-		// TODO: MAKE THIS abstract
-	}
-
 
 	@Override
 	public boolean checkUnsafeCast(Scope scope, TypeBinding castType, TypeBinding expressionType, TypeBinding match, boolean isNarrowing) {

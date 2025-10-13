@@ -141,6 +141,7 @@ public interface ClassFileConstants {
 	int MAJOR_VERSION_22 = 66;
 	int MAJOR_VERSION_23 = 67;
 	int MAJOR_VERSION_24 = 68;
+	int MAJOR_VERSION_25 = 69;
 
 	int MAJOR_VERSION_0 = 44;
 	int MAJOR_LATEST_VERSION = MAJOR_VERSION_24;
@@ -178,6 +179,7 @@ public interface ClassFileConstants {
 	long JDK22 = ((long)ClassFileConstants.MAJOR_VERSION_22 << 16) + ClassFileConstants.MINOR_VERSION_0;
 	long JDK23 = ((long)ClassFileConstants.MAJOR_VERSION_23 << 16) + ClassFileConstants.MINOR_VERSION_0;
 	long JDK24 = ((long)ClassFileConstants.MAJOR_VERSION_24 << 16) + ClassFileConstants.MINOR_VERSION_0;
+	long JDK25 = ((long)ClassFileConstants.MAJOR_VERSION_25 << 16) + ClassFileConstants.MINOR_VERSION_0;
 
 	public static long getLatestJDKLevel() {
 		return ((long)ClassFileConstants.MAJOR_LATEST_VERSION << 16) + ClassFileConstants.MINOR_VERSION_0;
@@ -223,7 +225,6 @@ public interface ClassFileConstants {
 	int ATTR_LINES = 0x2; // LineNumberAttribute
 	int ATTR_VARS = 0x4; // LocalVariableTableAttribute
 	int ATTR_STACK_MAP_TABLE = 0x8; // Stack map table attribute
-	int ATTR_STACK_MAP = 0x10; // Stack map attribute: cldc
 	int ATTR_TYPE_ANNOTATION = 0x20; // type annotation attribute (jsr 308)
 	int ATTR_METHOD_PARAMETERS = 0x40; // method parameters attribute (jep 118)
 
