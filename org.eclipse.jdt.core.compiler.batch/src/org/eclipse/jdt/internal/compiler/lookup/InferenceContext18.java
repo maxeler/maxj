@@ -1019,7 +1019,8 @@ public class InferenceContext18 {
 	/**
 	 * Try to solve the inference problem defined by constraints and bounds previously registered.
 	 * @param inferringApplicability toggles between 18.5.1 and 18.5.2
-	 * @param location the current invocation (18.5.1 - 18.5.5) or record pattern (18.5.5, see item 5)
+	 * @param location the current invocation (18.5.1 - 18.5.5)
+	 * @param isRecordPatternTypeInference true if location is actually a record pattern (18.5.5, see item 5)
 	 * @return a bound set representing the solution, or null if inference failed
 	 * @throws InferenceFailureException a compile error has been detected during inference
 	 */
