@@ -262,7 +262,7 @@ public abstract class ASTVisitor {
 	 * @return <code>true</code> if the children of this node should be
 	 * visited, and <code>false</code> if the children of this node should
 	 * be skipped
-	 * @since 3.42
+	 * @since 3.43
 	 */
 	public boolean visit(CompositeArrayAccess node) {
 		return true;
@@ -823,7 +823,7 @@ public abstract class ASTVisitor {
 	 * @return <code>true</code> if the children of this node should be
 	 * visited, and <code>false</code> if the children of this node should
 	 * be skipped
-	 * @since 3.42
+	 * @since 3.43
 	 */
 	public boolean visit(IF_Statement node) {
 		return true;
@@ -1743,7 +1743,7 @@ public abstract class ASTVisitor {
 	 * @return <code>true</code> if the children of this node should be
 	 * visited, and <code>false</code> if the children of this node should
 	 * be skipped
-	 * @since 3.42
+	 * @since 3.43
 	 */
 	public boolean visit(SWITCH_CASE node) {
 		return true;
@@ -1793,7 +1793,7 @@ public abstract class ASTVisitor {
 	 * @return <code>true</code> if the children of this node should be
 	 * visited, and <code>false</code> if the children of this node should
 	 * be skipped
-	 * @since 3.42
+	 * @since 3.43
 	 */
 	public boolean visit(SWITCH_Statement node) {
 		return true;
@@ -2239,7 +2239,7 @@ public abstract class ASTVisitor {
 	 * </p>
 	 *
 	 * @param node the node to visit
-	 * @since 3.42
+	 * @since 3.43
 	 */
 	public void endVisit(CompositeArrayAccess node) {
 		// default implementation: do nothing
@@ -2663,7 +2663,7 @@ public abstract class ASTVisitor {
 	 * </p>
 	 *
 	 * @param node the node to visit
-	 * @since 3.42
+	 * @since 3.43
 	 */
 	public void endVisit(IF_Statement node) {
 		// default implementation: do nothing
@@ -3335,7 +3335,7 @@ public abstract class ASTVisitor {
 	 * </p>
 	 *
 	 * @param node the node to visit
-	 * @since 3.42
+	 * @since 3.43
 	 */
 	public void endVisit(SWITCH_CASE node) {
 		// default implementation: do nothing
@@ -3373,7 +3373,7 @@ public abstract class ASTVisitor {
 	 * </p>
 	 *
 	 * @param node the node to visit
-	 * @since 3.42
+	 * @since 3.43
 	 */
 	public void endVisit(SWITCH_Statement node) {
 		// default implementation: do nothing

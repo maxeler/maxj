@@ -2153,7 +2153,7 @@ public final class AST {
 	 * the then statement is an empty block, and there is no else statement.
 	 *
 	 * @return a new unparented IF statement node
-	 * @since 3.42
+	 * @since 3.43
 	 */
 	public IF_Statement newIFStatement() {
 		return new IF_Statement(this);
@@ -3106,7 +3106,7 @@ public final class AST {
 	 * no statements or switch cases.
 	 *
 	 * @return a new unparented labeled statement node
-	 * @since 3.42
+	 * @since 3.43
 	 */
 	public SWITCH_Statement newSWITCHStatement() {
 		return new SWITCH_Statement(this);
@@ -3117,7 +3117,7 @@ public final class AST {
 	 * this AST. By default, the expression is unspecified, but legal.
 	 *
 	 * @return a new unparented switch case node
-	 * @since 3.42
+	 * @since 3.43
 	 */
 	public SWITCH_CASE newSWITCHCASE() {
 		return new SWITCH_CASE(this);
