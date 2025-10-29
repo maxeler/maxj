@@ -421,6 +421,7 @@ public void generateOperatorOverloadCode(BlockScope currentScope, CodeStream cod
 
 public void generatePutCode(BlockScope currentScope, CodeStream codeStream, boolean valueRequired, Assignment assignment){
 	if (this.appropriateMethodForOverload != null){
+		MethodBinding codegenBinding = this.appropriateMethodForOverload.original();
 		this.receiver.generateCode(currentScope, codeStream,true);
 		this.positionOne.generateCode(currentScope, codeStream, true);
 		this.positionTwo.generateCode(currentScope, codeStream, true);
@@ -428,27 +429,38 @@ public void generatePutCode(BlockScope currentScope, CodeStream codeStream, bool
 			assignment.expression.generateCode(currentScope, codeStream, true);
 		if (this.appropriateMethodForOverload.hasSubstitutedParameters() || this.appropriateMethodForOverload.hasSubstitutedReturnType()) {
 			TypeBinding tbo = this.appropriateMethodForOverload.returnType;
-			MethodBinding mb3 = this.appropriateMethodForOverload.original();
-			MethodBinding final_mb = mb3;
-			// TODO remove for real?
-			//final_mb.returnType = final_mb.returnType.erasure();
-			codeStream.invoke((final_mb.declaringClass.isInterface()) ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual, final_mb, final_mb.declaringClass.erasure());
+			codeStream.invoke((codegenBinding.declaringClass.isInterface()) ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual, codegenBinding, codegenBinding.declaringClass.erasure());
 
-			if (tbo.erasure().isProvablyDistinct(final_mb.returnType.erasure())) {
+			if (tbo.erasure().isProvablyDistinct(codegenBinding.returnType.erasure())) {
 				codeStream.checkcast(tbo);
 			}
 		} else {
-			MethodBinding original = this.appropriateMethodForOverload.original();
-			if(original.isPrivate()){
+			if(codegenBinding.isPrivate()){
 				codeStream.invoke(Opcodes.OPC_invokestatic, this.syntheticAccessor, null /* default declaringClass */);
 			}
 			else{
-				codeStream.invoke((original.declaringClass.isInterface()) ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual, original, original.declaringClass);
+				codeStream.invoke((codegenBinding.declaringClass.isInterface()) ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual, codegenBinding, codegenBinding.declaringClass);
 			}
 			if (!this.appropriateMethodForOverload.returnType.isBaseType()) codeStream.checkcast(this.appropriateMethodForOverload.returnType);
 		}
-		if (valueRequired) {
+
+		if (valueRequired){
+			// implicit conversion if necessary
 			codeStream.generateImplicitConversion(this.implicitConversion);
+		} else {
+			boolean isUnboxing = (this.implicitConversion & TypeIds.UNBOXING) != 0;
+			// conversion only generated if unboxing
+			if (isUnboxing) codeStream.generateImplicitConversion(this.implicitConversion);
+			switch (isUnboxing ? postConversionType(currentScope).id : codegenBinding.returnType.id) {
+				case T_long :
+				case T_double :
+					codeStream.pop2();
+					break;
+				case T_void :
+					break;
+				default :
+					codeStream.pop();
+			}
 		}
 	}
 }

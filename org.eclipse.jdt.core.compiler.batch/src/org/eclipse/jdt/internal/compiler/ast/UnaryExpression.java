@@ -32,6 +32,7 @@ import org.eclipse.jdt.internal.compiler.lookup.MethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.OperatorOverloadInvocationSite;
 import org.eclipse.jdt.internal.compiler.lookup.SourceTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
+import org.eclipse.jdt.internal.compiler.lookup.TypeIds;
 
 public class UnaryExpression extends OperatorExpression {
 
@@ -103,39 +104,40 @@ public class UnaryExpression extends OperatorExpression {
 	}
 
 	public void generateOperatorOverloadCodeSimple(BlockScope currentScope, CodeStream codeStream, boolean valueRequired) {
+		MethodBinding codegenBinding = this.appropriateMethodForOverload.original();
 		if (this.appropriateMethodForOverload.hasSubstitutedParameters() || this.appropriateMethodForOverload.hasSubstitutedReturnType()) {
 			TypeBinding tbo = this.appropriateMethodForOverload.returnType;
-			MethodBinding mb3 = this.appropriateMethodForOverload.original();
-			MethodBinding final_mb = mb3;
-			codeStream.checkcast(final_mb.declaringClass);
-			codeStream.invoke((final_mb.declaringClass.isInterface()) ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual, final_mb, final_mb.declaringClass.erasure());
-			if (tbo.erasure().isProvablyDistinct(final_mb.returnType.erasure())) {
+			codeStream.checkcast(codegenBinding.declaringClass);
+			codeStream.invoke((codegenBinding.declaringClass.isInterface()) ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual, codegenBinding, codegenBinding.declaringClass.erasure());
+			if (tbo.erasure().isProvablyDistinct(codegenBinding.returnType.erasure())) {
 				codeStream.checkcast(tbo);
 			}
 		} else {
-			MethodBinding original = this.appropriateMethodForOverload.original();
-			if(original.isPrivate()){
+			if (codegenBinding.isPrivate()){
 				codeStream.invoke(Opcodes.OPC_invokestatic, this.syntheticAccessor, null /* default declaringClass */);
 			}
 			else{
-				codeStream.invoke((original.declaringClass.isInterface()) ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual, original, original.declaringClass);
+				codeStream.invoke((codegenBinding.declaringClass.isInterface()) ? Opcodes.OPC_invokeinterface : Opcodes.OPC_invokevirtual, codegenBinding, codegenBinding.declaringClass);
 			}
 			if (!this.appropriateMethodForOverload.returnType.isBaseType()) codeStream.checkcast(this.appropriateMethodForOverload.returnType);
 		}
 
-		String rvn = new String(this.resolvedType.constantPoolName());
-
-		if (!valueRequired) {
-			if (this.resolvedType.id != TypeBinding.VOID.id) {
-				if ((this.resolvedType.isEquivalentTo(TypeBinding.DOUBLE))
-						|| (this.resolvedType.isEquivalentTo(TypeBinding.LONG))
-						|| (rvn.equals("java/lang/Double")) //$NON-NLS-1$
-						|| (rvn.equals("java/lang/Long"))) { //$NON-NLS-1$
+		if (valueRequired){
+			// implicit conversion if necessary
+			codeStream.generateImplicitConversion(this.implicitConversion);
+		} else {
+			boolean isUnboxing = (this.implicitConversion & TypeIds.UNBOXING) != 0;
+			// conversion only generated if unboxing
+			if (isUnboxing) codeStream.generateImplicitConversion(this.implicitConversion);
+			switch (isUnboxing ? postConversionType(currentScope).id : codegenBinding.returnType.id) {
+				case T_long :
+				case T_double :
 					codeStream.pop2();
-				}
-				else {
+					break;
+				case T_void :
+					break;
+				default :
 					codeStream.pop();
-				}
 			}
 		}
 	}
