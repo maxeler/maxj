@@ -1119,7 +1119,7 @@ public TypeBinding resolveTypeExpecting(BlockScope scope, TypeBinding expectedTy
 	return expressionType;
 }
 
-public Expression resolveExpressionExpecting(TypeBinding targetType, Scope scope, InferenceContext18 context) {
+public Expression resolveExpressionExpecting(TypeBinding targetType, Scope scope) {
 	return this; // subclasses should implement for a better resolved expression if required.
 }
 
@@ -1236,6 +1236,17 @@ public boolean isPolyExpression() throws UnsupportedOperationException {
 /** Variant of isPolyExpression() to be used during type inference, when a resolution candidate exists. */
 public boolean isPolyExpression(MethodBinding method) {
 	return false;
+}
+
+// Answer if the receiver is a poly-expression in the given context.
+public final boolean isPolyExpression(ExpressionContext context) {
+	ExpressionContext prevailing = getExpressionContext();
+	try {
+		setExpressionContext(context);
+		return isPolyExpression();
+	} finally {
+		setExpressionContext(prevailing);
+	}
 }
 
 

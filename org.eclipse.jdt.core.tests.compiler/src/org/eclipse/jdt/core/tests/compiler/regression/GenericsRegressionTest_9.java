@@ -1477,6 +1477,385 @@ public void testGH4308() {
 		},
 		"replay");
 }
+public void testGH4392() {
+	runConformTest(new String[] {
+			"AFactory.java",
+			"""
+			public abstract class AFactory<T> {
+
+			    public <U extends T> U getProcess(Object object) {
+			        return getProcess(object.getClass()); // Type mismatch: cannot convert from T to U
+			    }
+
+			    public abstract <U extends T> U getProcess(Class<?> classeObject);
+
+			}
+			"""});
+}
+public void testGH4402() {
+	runConformTest(new String[] {
+			"Main.java",
+			"""
+			import java.util.Collection;
+
+			public class Main {
+
+				void test() {
+					ArrayNode results = new ArrayNode();
+
+					// those first two compile fine
+					assertThat(results, jsonArray(empty()));
+					assertThat(results, jsonArray(contains(jsonObject().where("Id", jsonText("dataset-a")),
+							jsonObject().where("Id", jsonText("dataset-b")))));
+					/*
+					 * this one fails compilation:
+					 * The method jsonArray(Main.Matcher<? super Collection<? extends Main.JsonNode>>) in the type Main is not applicable for the arguments (Main.Matcher<Iterable<? extends capture#3-of ? extends Main.JsonNode>>)
+					 *
+					 * However it will compile fine if I comment out lines 12-13
+					 */
+					assertThat(results, jsonArray(contains(jsonObject().where("Id", jsonText("dataset-c")))));
+					/*
+					 * this one fails compilation:
+					 * The method jsonArray(Main.Matcher<? super Collection<? extends Main.JsonNode>>) in the type Main is not applicable for the arguments (Main.Matcher<Iterable<? extends capture#3-of ? extends Main.JsonNode>>)
+					 *
+					 * However it will compile fine if I comment out lines 12-13 AND 20
+					 */
+					assertThat(results, jsonArray(contains(jsonObject().where("Id", jsonText("dataset-@1")),
+							jsonObject().where("Id", jsonText("dataset-@2")))));
+				}
+
+				public static abstract class JsonNode { }
+				public static class ArrayNode extends ContainerNode<ArrayNode> { }
+				public static abstract class ContainerNode<T extends ContainerNode<T>> extends JsonNode { }
+				public class ObjectNode extends ContainerNode<ObjectNode> { }
+				public class TextNode extends JsonNode { }
+				public interface Matcher<T> { }
+
+				public static <E> Matcher<java.util.Collection<? extends E>> empty() { return null; }
+
+				public static <T> void assertThat(T actual, Matcher<? super T> matcher) { }
+
+				@SafeVarargs
+				public static <E> Matcher<java.lang.Iterable<? extends E>> contains(Matcher<? super E>... itemMatchers) { return null; }
+
+				public static Matcher<JsonNode> jsonArray(Matcher<? super Collection<? extends JsonNode>> elementsMatcher) { return null; }
+
+				public static IsJsonObject jsonObject() { return null; }
+
+				public static Matcher<JsonNode> jsonText(String text) { return null; }
+
+				public static class IsJsonArray extends AbstractJsonNodeMatcher<ArrayNode> { }
+
+				public static class IsJsonObject extends AbstractJsonNodeMatcher<ObjectNode> {
+					public IsJsonObject where(String key, Matcher<? super JsonNode> valueMatcher) {
+						return null;
+					}
+				}
+
+				public static class IsJsonText extends AbstractJsonNodeMatcher<TextNode> { }
+				public static abstract class AbstractJsonNodeMatcher<A extends JsonNode> implements Matcher<JsonNode> { }
+			}
+			"""
+		},
+		"");
+}
+public void testGH4346() {
+	if (this.complianceLevel < ClassFileConstants.JDK16)
+		return; // uses records
+	runConformTest(new String[] {
+			"X.java",
+			"""
+			import java.util.function.Function;
+			public class X {
+				public static <T> W1<W2<T>> main(String[] args) {
+					return m(m2(), W2::t, W2::new);
+				}
+
+				public static <T1, T2> W1<T1> m(W1<T2> w1, Function<T1, T2> f1, Function<T2, T1> f2) {
+					return null;
+				}
+				private static <T> W1<W1<T>> m2() {
+					return null;
+				}
+				private record W1<T>(T t) {}
+				private record W2<T>(W1<T> t) {}
+			}
+			"""
+	});
+}
+public void testGH4498() {
+	runConformTest(new String[] {
+			"AFactory.java",
+			"""
+			public abstract class AFactory<T> {
+
+			  public <U extends AFactory> U getProcess(Object object) {
+			    return getProcess(object.getClass()); // Type mismatch: cannot convert from AFactory<capture#2-of ?> to U
+			  }
+
+			  public abstract <U extends AFactory<?>> U getProcess(Class<?> classeObject);
+
+			}
+			"""});
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4503
+// [Mockito] Compilation error "Unhandled exception type Throwable"
+public void testIssue4503_differs_from_javac() {
+	runConformTest(new String[] {
+			"X.java",
+			"""
+			public class X {
+
+				interface RetryCallback<T, E extends Throwable> {}
+
+				interface OngoingStubbing<T> {}
+
+			    public void test() {
+			        when(execute(any()));   // <------ Unhandled exception type Throwable
+			    }
+
+			    public static <T> T any() {
+			        return null;
+			    }
+
+			    public static final <T, E extends Throwable> T execute(RetryCallback<T, E> retryCallback) throws E {
+					return null;
+				}
+
+			    public static <T> OngoingStubbing<T> when(T methodCall) {
+			        return null;
+			    }
+			}
+			"""});
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4503
+// [Mockito] Compilation error "Unhandled exception type Throwable"
+public void testIssue4503_matches_with_javac() {
+	runNegativeTest(new String[] {
+			"X.java",
+			"""
+			public class X {
+
+				interface RetryCallback<T, E extends Throwable> {}
+
+				interface OngoingStubbing<T> {}
+
+			    public void test() {
+			        when(execute((RetryCallback<java.lang.Object,java.lang.Throwable>) null));   // <------ Unhandled exception type Throwable
+			    }
+
+			    public static <T> T any() {
+			        return null;
+			    }
+
+			    public static final <T, E extends Throwable> T execute(RetryCallback<T, E> retryCallback) throws E {
+					return null;
+				}
+
+			    public static <T> OngoingStubbing<T> when(T methodCall) {
+			        return null;
+			    }
+			}
+			"""},
+			"----------\n" +
+			"1. ERROR in X.java (at line 8)\r\n" +
+			"	when(execute((RetryCallback<java.lang.Object,java.lang.Throwable>) null));   // <------ Unhandled exception type Throwable\r\n" +
+			"	     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
+			"Unhandled exception type Throwable\n" +
+			"----------\n");
+}
+public void testGH4533() {
+	runConformTest(new String[] {
+		"X.java",
+		"""
+		import java.util.function.Supplier;
+
+		public class X implements Foo {
+
+			private final Foo delegate;
+			private final Helper helper;
+
+			public X(Helper helper, Foo delegate) {
+				this.helper = helper;
+				this.delegate = delegate;
+			}
+
+			@Override
+			public <T> void setProperty(T value) {
+				helper.run(() -> delegate.setProperty(value));  // Problem detected during type inference: expression has no value
+			}
+		}
+
+		interface Foo {
+			public <T> void setProperty(T value);
+		}
+
+		interface Helper {
+			public void run(Runnable runnable); // comment out this to see a different error
+			public <R> R run(Supplier<R> supplier);
+		}
+		"""
+	});
+}
+public void testGH4281() {
+	runConformTest(new String[] {
+		"InferenceTest.java",
+		"""
+		public class InferenceTest {
+
+			public static class A<I extends C<I, ?>> {}
+
+			public static class B<I extends C<I, ?>, J> {
+				public B(A<I> a) {}
+			}
+
+			public static class C<I extends C<I, J>, J> {}
+
+			public static void test(A<?> a) {
+				new B<>(a);
+			}
+		}
+		"""
+	});
+}
+public void testGH1501() {
+	runNegativeTest(new String[] {
+			"Test.java",
+			"""
+			import java.util.Map;
+			import java.util.function.Function;
+
+			public class Test {
+			  public Outer<Data> errorInLambda() {
+			    Outer<Data> x = new Outer<>(new InnerImpl<>(Map.of()));
+			    // the above one works but on mouse over InnerImpl produces:
+			    // InnerImpl.InnerImpl<Object>(Map<String, Function<Object, Object>> map)
+			    // should be:
+			    // InnerImpl.InnerImpl<Data>(Map<String, Function<Data, Object>> map)
+
+			    Outer<Data> y = new Outer<>(new InnerImpl<Object>(Map.of()));
+			    // but this one correctly errors with:
+			    // Cannot infer type arguments for Outer<>
+
+			    return new Outer<>(new InnerImpl<>(Map.of("x",
+			        data -> data.getValue() // Eclipse error:
+			        // This lambda expression must return a result of type Object
+			        // javac correctly infers Data to both diamonds here and no errors produced
+			        )));
+			  }
+			}
+
+			class Outer<T> {
+			  final Inner<T> inner;
+
+			  Outer(Inner<T> inner) {
+			      this.inner = inner;
+			  }
+			}
+
+			interface Inner<T> {}
+
+			class InnerImpl<T> implements Inner<T> {
+			  InnerImpl(Map<String, Function<T, Object>> map) {}
+			}
+
+			class Data {
+			  String value;
+
+			  Data(String value) {
+			      this.value = value;
+			  }
+
+			  String getValue() {
+			      return value;
+			  }
+			}
+			"""
+		},
+		"""
+		----------
+		1. ERROR in Test.java (at line 12)
+			Outer<Data> y = new Outer<>(new InnerImpl<Object>(Map.of()));
+			                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+		Cannot infer type arguments for Outer<>
+		----------
+		""");
+}
+public void testGH4463() {
+	runConformTest(new String[] {
+		"A.java",
+		"""
+		interface A<T> {}
+		interface B<T> extends A<T> {}
+		interface C<T> extends A<T> {}
+
+		class BC1 implements B<String>, C<String> {}
+		class BC2 implements B<Integer>, C<Integer> {}
+
+		// Eclipse Compile error "The interface A cannot be implemented more than once with different arguments: A<?> and A<?>"
+		interface IHelperBC<T extends B<?> & C<?>> {}
+
+		class HelperBC1 implements IHelperBC<BC1> {}
+		class HelperBC2 implements IHelperBC<BC2> {}
+		"""
+	});
+}
+public void testGH4463b() {
+	runConformTest(new String[] {
+		"A.java",
+		"""
+		interface A<T> {}
+		interface B<T> extends A<T> {}
+		interface C<T> extends A<T> {}
+
+		class BC1 implements B<String>, C<String> {}
+		class BC2 implements B<Integer>, C<Integer> {}
+
+		// eclipse compile error "The interface A cannot be implemented more than once with different arguments: A<? super T> and A<? super T>"
+		interface IHelperBCSuper<T, BC extends B<? super T> & C<? super T>> {}
+		// eclipse compile error "The interface A cannot be implemented more than once with different arguments: A<? extends T> and A<? extends T>"
+		interface IHelperBCExtends<T, BC extends B<? extends T> & C<? extends T>> {}
+		"""
+	});
+}
+
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4550
+// Static interface methods excluded from type variable membership
+public void testIssue4550() {
+	runNegativeTest(new String[] {
+			"Tester.java",
+			"""
+			public class Tester<T extends Thing> {
+			    public void test() {
+			        System.out.println("Testing: " + T.getStuff());  // Error is here
+			    }
+
+			    public static void main(String[] args) {
+			        Tester<OtherThing> tester = new Tester<>();
+			        tester.test();
+			    }
+
+			}
+
+			interface Thing {
+			    static String getStuff() {
+			        return "Stuff";
+			    }
+			}
+
+			class OtherThing implements Thing {
+			}
+			""",
+	    },
+		"----------\n" +
+		"1. ERROR in Tester.java (at line 3)\n" +
+		"	System.out.println(\"Testing: \" + T.getStuff());  // Error is here\n" +
+		"	                                   ^^^^^^^^\n" +
+		"The method getStuff() is undefined for the type T\n" +
+		"----------\n"
+		);
+}
+
 public static Class<GenericsRegressionTest_9> testClass() {
 	return GenericsRegressionTest_9.class;
 }

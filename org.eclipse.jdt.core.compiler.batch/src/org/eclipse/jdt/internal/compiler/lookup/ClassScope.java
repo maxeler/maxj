@@ -54,7 +54,7 @@ public class ClassScope extends Scope {
 	java.util.ArrayList<TypeReference> deferredBoundChecks;
 	public boolean resolvingPolyExpressionArguments = false;
 	/**
-	 * This is the primary flag for detection of early construction contexts (JEP 482).
+	 * This is the primary flag for detection of early construction contexts (JEP 513).
 	 * It is temporarily set on the scope of a class while processing statements of this class's
 	 * early construction context (during resolveType(), analyseCode() and generateCode())
 	 * <p>Main access is via {@link Scope#enterEarlyConstructionContext()}, {@link Scope#leaveEarlyConstructionContext()}
@@ -63,7 +63,7 @@ public class ClassScope extends Scope {
 	 * into {@code scopesInEarlyConstruction}, for use during generateCode(), which doesn't have the
 	 * context of the lambda declaration.
 	 * </p>
-	 * <p>All this is always active at compliance 23, see {@link JavaFeature#FLEXIBLE_CONSTRUCTOR_BODIES}
+	 * <p>All this is always active at compliance 23+, see {@link JavaFeature#FLEXIBLE_CONSTRUCTOR_BODIES}
 	 * for details on where enablement is actually checked.</p>
 	 */
 	public boolean insideEarlyConstructionContext = false;
@@ -139,7 +139,7 @@ public class ClassScope extends Scope {
 		}
 		anonymousType.tagBits |= TagBits.EndHierarchyCheck;
 		connectMemberTypes();
-		collateRecordComponents();
+		buildComponents();
 		buildFieldsAndMethods();
 		anonymousType.faultInTypesForFieldsAndMethods();
 		anonymousType.verifyMethods(environment().methodVerifier());
@@ -309,7 +309,7 @@ public class ClassScope extends Scope {
 		checkParameterizedTypeBounds();
 		checkParameterizedSuperTypeCollisions();
 		this.referenceContext.updateSupertypesWithAnnotations(Collections.emptyMap());
-		collateRecordComponents();
+		buildComponents();
 		buildFieldsAndMethods();
 		localType.faultInTypesForFieldsAndMethods();
 
@@ -596,8 +596,8 @@ public class ClassScope extends Scope {
 						}
 					}
 			    }
-			} else if (this.parent.referenceContext() instanceof TypeDeclaration) {
-				TypeDeclaration typeDecl = (TypeDeclaration) this.parent.referenceContext();
+			} else if (this.parent instanceof ClassScope classScope && classScope.referenceContext != null) {
+				TypeDeclaration typeDecl = classScope.referenceContext;
 				if (TypeDeclaration.kind(typeDecl.modifiers) == TypeDeclaration.INTERFACE_DECL) {
 					// Sec 8.1.3 applies for local types as well
 					modifiers |= ClassFileConstants.AccStatic;
@@ -613,24 +613,13 @@ public class ClassScope extends Scope {
 						if (methodScope.isInsideInitializer()) {
 							SourceTypeBinding type = ((TypeDeclaration) methodScope.referenceContext).binding;
 
-							// inside field declaration ? check field modifier to see if deprecated
-							if (methodScope.initializedField != null) {
-									// currently inside this field initialization
-								if (methodScope.initializedField.isViewedAsDeprecated() && !sourceType.isDeprecated())
-									modifiers |= ExtraCompilerModifiers.AccDeprecatedImplicitly;
-							} else {
-								if (type.isStrictfp())
-									modifiers |= ClassFileConstants.AccStrictfp;
-								if (type.isViewedAsDeprecated() && !sourceType.isDeprecated())
-									modifiers |= ExtraCompilerModifiers.AccDeprecatedImplicitly;
-							}
+							if (methodScope.initializedField == null && type.isStrictfp())
+								modifiers |= ClassFileConstants.AccStrictfp;
 						} else {
 							MethodBinding method = ((AbstractMethodDeclaration) methodScope.referenceContext).binding;
 							if (method != null) {
 								if (method.isStrictfp())
 									modifiers |= ClassFileConstants.AccStrictfp;
-								if (method.isViewedAsDeprecated() && !sourceType.isDeprecated())
-									modifiers |= ExtraCompilerModifiers.AccDeprecatedImplicitly;
 							}
 						}
 						break;
@@ -638,10 +627,6 @@ public class ClassScope extends Scope {
 						// local member
 						if (enclosingType.isStrictfp())
 							modifiers |= ClassFileConstants.AccStrictfp;
-						if (enclosingType.isViewedAsDeprecated() && !sourceType.isDeprecated()) {
-							modifiers |= ExtraCompilerModifiers.AccDeprecatedImplicitly;
-							sourceType.tagBits |= enclosingType.tagBits & TagBits.AnnotationTerminallyDeprecated;
-						}
 						break;
 				}
 				scope = scope.parent;
@@ -1217,27 +1202,6 @@ public class ClassScope extends Scope {
 						continue nextPermittedType;
 					}
 
-					if (sourceType.isClass()) {
-						ReferenceBinding superClass = permittedType.superclass();
-						superClass = superClass == null ? null : superClass.actualType();
-						if (!TypeBinding.equalsEquals(sourceType, superClass))
-							problemReporter().sealedClassNotDirectSuperClassOf(permittedType, permittedTypeRef, sourceType);
-					} else if (sourceType.isInterface()) {
-						ReferenceBinding[] superInterfaces = permittedType.superInterfaces();
-						boolean hierarchyOK = false;
-						if (superInterfaces != null) {
-							for (ReferenceBinding superInterface : superInterfaces) {
-								superInterface = superInterface == null ? null : superInterface.actualType();
-								if (TypeBinding.equalsEquals(sourceType, superInterface)) {
-									hierarchyOK = true;
-									break;
-								}
-							}
-							if (!hierarchyOK)
-								problemReporter().sealedInterfaceNotDirectSuperInterfaceOf(permittedType, permittedTypeRef, sourceType);
-						}
-					}
-
 					checkSealingProximity(permittedType, permittedTypeRef, sourceType);
 
 					for (int j = 0; j < i; j++) {
@@ -1384,13 +1348,14 @@ public class ClassScope extends Scope {
 		return noProblems;
 	}
 
-	void collateRecordComponents() {
+	void buildComponents() {
 		SourceTypeBinding sourceType = this.referenceContext.binding;
-		if (sourceType.components() == null) {
-			sourceType.setComponents(Binding.NO_COMPONENTS);
+		if (!sourceType.areComponentsInitialized()) {
 			RecordComponent[] components = this.referenceContext.recordComponents;
 			int length = components.length;
 			RecordComponentBinding[] rcbs = length == 0 ? Binding.NO_COMPONENTS : new RecordComponentBinding[length];
+			if (length != 0)
+				sourceType.tagBits |= TagBits.HasUnresolvedComponents;
 			HashMap<String, RecordComponentBinding> knownComponents = new HashMap<>(length);
 			int count = 0;
 			for (RecordComponent component : components) {
@@ -1406,18 +1371,17 @@ public class ClassScope extends Scope {
 					component.binding = null;
 				} else {
 					knownComponents.put(name, rcb);
-					if (sourceType.resolveTypeFor(rcb) != null)
-						rcbs[count++] = rcb;
+					rcbs[count++] = rcb;
 				}
 			}
 			if (count != rcbs.length) // remove duplicate or broken components
 				System.arraycopy(rcbs, 0, rcbs = count == 0 ? Binding.NO_COMPONENTS : new RecordComponentBinding[count], 0, count);
-			sourceType.setComponents(rcbs);
+			sourceType.components = rcbs;
 		}
 		ReferenceBinding[] memberTypes = sourceType.memberTypes;
 		if (memberTypes != null) {
 			for (ReferenceBinding memberType : memberTypes)
-				((SourceTypeBinding) memberType).scope.collateRecordComponents();
+				((SourceTypeBinding) memberType).scope.buildComponents();
 		}
 	}
 

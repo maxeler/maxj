@@ -51,6 +51,7 @@ package org.eclipse.jdt.internal.compiler.lookup;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -96,6 +97,7 @@ public class BinaryTypeBinding extends ReferenceBinding {
 	protected FieldBinding[] fields;
 	protected RecordComponentBinding[] components;
 	protected MethodBinding[] methods;
+	protected MethodBinding[] methodsInOriginalOrder;
 	protected ReferenceBinding[] memberTypes;
 	protected TypeVariableBinding[] typeVariables;
 	protected ModuleBinding module;
@@ -328,8 +330,6 @@ public BinaryTypeBinding(PackageBinding packageBinding, IBinaryType binaryType, 
 		this.tagBits |= TagBits.HasUnresolvedEnclosingType;
 		if (enclosingType().isStrictfp())
 			this.modifiers |= ClassFileConstants.AccStrictfp;
-		if (enclosingType().isDeprecated())
-			this.modifiers |= ExtraCompilerModifiers.AccDeprecatedImplicitly;
 	}
 	if (needFieldsAndMethods)
 		cachePartsFrom(binaryType, true);
@@ -598,19 +598,6 @@ private void cachePartsFrom2(IBinaryType binaryType, boolean needFieldsAndMethod
 			IBinaryField[] iFields = binaryType.getFields();
 			createFields(iFields, binaryType, sourceLevel, missingTypeNames, FIELD_INITIALIZATION);
 			IBinaryMethod[] iMethods = createMethods(binaryType.getMethods(), binaryType, sourceLevel, missingTypeNames);
-			boolean isViewedAsDeprecated = isViewedAsDeprecated();
-			if (isViewedAsDeprecated) {
-				for (FieldBinding field : this.fields) {
-					if (!field.isDeprecated()) {
-						field.modifiers |= ExtraCompilerModifiers.AccDeprecatedImplicitly;
-					}
-				}
-				for (MethodBinding method : this.methods) {
-					if (!method.isDeprecated()) {
-						method.modifiers |= ExtraCompilerModifiers.AccDeprecatedImplicitly;
-					}
-				}
-			}
 			if (this.environment.globalOptions.isAnnotationBasedNullAnalysisEnabled) {
 				if (iComponents != null) {
 					for (int i = 0; i < iComponents.length; i++) {
@@ -671,7 +658,6 @@ private void cachePartsFrom2(IBinaryType binaryType, boolean needFieldsAndMethod
 						if (CharOperation.equals(elementValuePair.name, TypeConstants.FOR_REMOVAL)) {
 							if (elementValuePair.value instanceof BooleanConstant && ((BooleanConstant) elementValuePair.value).booleanValue()) {
 								this.tagBits |= TagBits.AnnotationTerminallyDeprecated;
-								markImplicitTerminalDeprecation(this);
 							}
 						}
 					}
@@ -692,22 +678,6 @@ private void cachePartsFrom2(IBinaryType binaryType, boolean needFieldsAndMethod
 
 		this.environment.requestingType = previousRequester;
 	}
-}
-
-void markImplicitTerminalDeprecation(ReferenceBinding type) {
-	for (ReferenceBinding member : type.memberTypes()) {
-		member.tagBits |= TagBits.AnnotationTerminallyDeprecated;
-		markImplicitTerminalDeprecation(member);
-	}
-	MethodBinding[] methodsOfType = type.unResolvedMethods();
-	if (methodsOfType != null)
-		for (MethodBinding methodBinding : methodsOfType)
-			methodBinding.tagBits |= TagBits.AnnotationTerminallyDeprecated;
-
-	FieldBinding[] fieldsOfType = type.unResolvedFields();
-	if (fieldsOfType != null)
-		for (FieldBinding fieldBinding : fieldsOfType)
-			fieldBinding.tagBits |= TagBits.AnnotationTerminallyDeprecated;
 }
 
 /* When creating a method we need to pass in any default 'nullness' from a @NNBD immediately on this method. */
@@ -1792,6 +1762,19 @@ private ReferenceBinding[] maybeSortedMemberTypes() {
 	return this.memberTypes;
 }
 
+/**
+ * Returns the methods in the order they appear in the class file if available. In some case,
+ * for e.g., when annotation processing is enabled, the original order is preserved and available
+ * for clients. If the original order is not available, the regular sorted array is returned.
+ *
+ * @return the methods in the original order
+ */
+public MethodBinding[] methodsInOriginalOrder() {
+	if (this.methodsInOriginalOrder != null) {
+		return this.methodsInOriginalOrder;
+	}
+	return this.methods;
+}
 // NOTE: the return type, arg & exception types of each method of a binary type are resolved when needed
 @Override
 public MethodBinding[] methods() {
@@ -1806,8 +1789,12 @@ public MethodBinding[] methods() {
 	// lazily sort methods
 	if ((this.tagBits & TagBits.AreMethodsSorted) == 0) {
 		int length = this.methods.length;
-		if (length > 1)
+		if (length > 1) {
+			if (this.environment.globalOptions.processAnnotations) {
+				this.methodsInOriginalOrder = Arrays.copyOf(this.methods, this.methods.length);
+			}
 			ReferenceBinding.sortMethods(this.methods, 0, length);
+		}
 		this.tagBits |= TagBits.AreMethodsSorted;
 	}
 	for (int i = this.methods.length; --i >= 0;)

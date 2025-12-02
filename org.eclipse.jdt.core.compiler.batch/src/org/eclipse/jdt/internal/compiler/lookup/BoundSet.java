@@ -455,6 +455,8 @@ class BoundSet {
 		if (that == null || environment == null)
 			return;
 		addBounds(that.flatten(), environment);
+		this.inThrows.addAll(that.inThrows);
+		this.captures.putAll(that.captures);
 	}
 
 	public boolean isInstantiated(InferenceVariable inferenceVariable) {
@@ -1300,25 +1302,6 @@ class BoundSet {
 		}
 	}
 
-	public TypeBinding getEquivalentOuterVariable(InferenceVariable variable, InferenceVariable[] outerVariables) {
-		ThreeSets three = this.boundsPerVariable.get(variable);
-		if (three != null) {
-			for (TypeBound bound : three.sameBounds) {
-				for (InferenceVariable iv : outerVariables)
-					if (TypeBinding.equalsEquals(bound.right, iv))
-						return iv;
-			}
-		}
-		for (InferenceVariable iv : outerVariables) {
-			three = this.boundsPerVariable.get(iv);
-			if (three != null && three.sameBounds != null) {
-				for (TypeBound bound : three.sameBounds)
-					if (TypeBinding.equalsEquals(bound.right, variable))
-						return iv;
-			}
-		}
-		return null;
-	}
 	public TypeBinding condition18_5_5_item_4(
 			ReferenceBinding rAlpha,
 			InferenceVariable[] alpha,

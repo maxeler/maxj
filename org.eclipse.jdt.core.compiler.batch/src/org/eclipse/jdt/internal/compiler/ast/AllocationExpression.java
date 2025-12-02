@@ -83,7 +83,7 @@ public class AllocationExpression extends Expression implements IPolyExpression,
 	public TypeBinding[] genericTypeArguments;
 	public FieldDeclaration enumConstant; // for enum constant initializations
 	protected TypeBinding typeExpected;	  // for <> inference
-	public boolean inferredReturnType;
+	public boolean wasInferred;
 
 	public FakedTrackingVariable closeTracker;	// when allocation a Closeable store a pre-liminary tracking variable here
 	public ExpressionContext expressionContext = VANILLA_CONTEXT;
@@ -91,7 +91,6 @@ public class AllocationExpression extends Expression implements IPolyExpression,
 	 // hold on to this context from invocation applicability inference until invocation type inference (per method candidate):
 	private Map<ParameterizedGenericMethodBinding, InferenceContext18> inferenceContexts;
 	public HashMap<TypeBinding, MethodBinding> solutionsPerTargetType;
-	private InferenceContext18 outerInferenceContext; // resolving within the context of an outer (lambda) inference?
 	public boolean argsContainCast;
 	public TypeBinding[] argumentTypes = Binding.NO_PARAMETERS;
 	public boolean argumentsHaveErrors = false;
@@ -559,7 +558,7 @@ protected void checkEarlyConstructionContext(BlockScope scope) {
 		if (uninitialized != null)
 			scope.problemReporter().allocationInEarlyConstructionContext(this, this.resolvedType, uninitialized);
 	}
-	// if JEP 482 is not enabled, problems will be detected when looking for enclosing instance(s)
+	// if JEP 513 is not enabled, problems will be detected when looking for enclosing instance(s)
 }
 protected boolean isMissingTypeRelevant() {
 	if (this.binding != null && this.binding.isVarargs()) {
@@ -631,10 +630,8 @@ public MethodBinding inferConstructorOfElidedParameterizedType(final Scope scope
 		if (cached != null)
 			return cached;
 	}
-	boolean[] inferredReturnTypeOut = new boolean[1];
-	MethodBinding constructor = inferDiamondConstructor(scope, this, this.type.resolvedType, this.argumentTypes, inferredReturnTypeOut);
+	MethodBinding constructor = inferDiamondConstructor(scope, this, this.type.resolvedType, this.argumentTypes);
 	if (constructor != null) {
-		this.inferredReturnType = inferredReturnTypeOut[0];
 		if (this.expressionContext == INVOCATION_CONTEXT && this.typeExpected == null) { // not ready for invocation type inference
 			if (constructor instanceof PolyParameterizedGenericMethodBinding) {
 				return constructor; // keep this placeholder binding, which also serves as a key into #inferenceContexts
@@ -649,7 +646,7 @@ public MethodBinding inferConstructorOfElidedParameterizedType(final Scope scope
 	return constructor;
 }
 
-public static MethodBinding inferDiamondConstructor(Scope scope, InvocationSite site, TypeBinding type, TypeBinding[] argumentTypes, boolean[] inferredReturnTypeOut) {
+public static MethodBinding inferDiamondConstructor(Scope scope, InvocationSite site, TypeBinding type, TypeBinding[] argumentTypes) {
 	ReferenceBinding genericType = ((ParameterizedTypeBinding) type).genericType();
 	ReferenceBinding enclosingType = type.enclosingType();
 	ParameterizedTypeBinding allocationType = scope.environment().createParameterizedType(genericType, genericType.typeVariables(), enclosingType);
@@ -660,7 +657,8 @@ public static MethodBinding inferDiamondConstructor(Scope scope, InvocationSite 
 		if (site.invocationTargetType() == null && site.getExpressionContext().definesTargetType() && factory instanceof PolyParameterizedGenericMethodBinding)
 			return factory; // during applicability inference keep the PolyParameterizedGenericMethodBinding
 		ParameterizedGenericMethodBinding genericFactory = (ParameterizedGenericMethodBinding) factory;
-		inferredReturnTypeOut[0] = genericFactory.inferredReturnType;
+		if (site instanceof AllocationExpression allocation)
+			allocation.wasInferred = genericFactory.wasInferred;
 		SyntheticFactoryMethodBinding sfmb = (SyntheticFactoryMethodBinding) factory.original();
 		TypeVariableBinding[] constructorTypeVariables = sfmb.getConstructor().typeVariables();
 		TypeBinding [] constructorTypeArguments = constructorTypeVariables != null ? new TypeBinding[constructorTypeVariables.length] : Binding.NO_TYPES;
@@ -692,7 +690,7 @@ public TypeBinding[] inferElidedTypes(ParameterizedTypeBinding parameterizedType
 	MethodBinding factory = scope.getStaticFactory(allocationType, enclosingType, this.argumentTypes, this);
 	if (factory instanceof ParameterizedGenericMethodBinding && factory.isValidBinding()) {
 		ParameterizedGenericMethodBinding genericFactory = (ParameterizedGenericMethodBinding) factory;
-		this.inferredReturnType = genericFactory.inferredReturnType;
+		this.wasInferred = genericFactory.wasInferred;
 		return ((ParameterizedTypeBinding)factory.returnType).arguments;
 	}
 	return null;
@@ -856,7 +854,6 @@ public void cleanUpInferenceContexts() {
 		value.cleanUp();
 	}
 	this.inferenceContexts = null;
-	this.outerInferenceContext = null;
 	this.solutionsPerTargetType = null;
 }
 
@@ -867,7 +864,7 @@ public ExpressionContext getExpressionContext() {
 }
 @Override
 public InferenceContext18 freshInferenceContext(Scope scope) {
-	return new InferenceContext18(scope, this.arguments, this, this.outerInferenceContext);
+	return new InferenceContext18(scope, this.arguments, this);
 }
 @Override
 public int nameSourceStart() {

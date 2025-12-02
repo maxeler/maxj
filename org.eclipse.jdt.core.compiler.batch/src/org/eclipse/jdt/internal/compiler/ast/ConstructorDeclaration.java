@@ -58,6 +58,8 @@ import org.eclipse.jdt.internal.compiler.util.Util;
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class ConstructorDeclaration extends AbstractMethodDeclaration {
 
+	public static final UnconditionalFlowInfo EMPTY_FLOW_INFO = new UnconditionalFlowInfo();
+
 	public ExplicitConstructorCall constructorCall;
 
 	public TypeParameter[] typeParameters;
@@ -76,7 +78,7 @@ enum AnalysisMode { ALL, PROLOGUE, REST }
 FlowInfo getPrologueInfo() {
 	if (this.prologueInfo != null)
 		return this.prologueInfo;
-	return new UnconditionalFlowInfo();
+	return EMPTY_FLOW_INFO;
 }
 
 /**
@@ -89,9 +91,11 @@ public void analyseCode(ClassScope classScope, InitializationFlowContext initial
 public void analyseCode(ClassScope classScope, InitializationFlowContext initializerFlowContext, FlowInfo flowInfo, int initialReachMode, AnalysisMode mode) {
 	// Effect of 'AnalysisMode mode':
 	// ALL: 		analyse in one go as normal.
-	// PROLOGUE:	analyse only statements *before* the explicit constructor call (if any)
-	// REST:		analyse only starting with the explicit constructor call, if none present behaves like ALL
+	// PROLOGUE:	analyse only statements up-to the explicit constructor call (arguments of this call are technically prologue, too)
+	//              if no relevant prologue exists, this invocation does nothing, and due to prologueInfo==null the next invocation will use mode ALL
+	// REST:		analyse only statements after the explicit constructor call
 	// FlowContext and FlowInfo produced during PROLOGUE will be held in fields prologueContext and prologueInfo for use during REST
+	// prologueInfo is furthermore assumed to happen *before* any field initializers, see its use in TypeDeclaration.internalAnalyseCode()
 	if (this.ignoreFurtherInvestigation)
 		return;
 
@@ -206,30 +210,25 @@ public void analyseCode(ClassScope classScope, InitializationFlowContext initial
 				}
 			}
 
-			if (JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES.matchesCompliance(this.scope.compilerOptions())) {
+			if (JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES.isSupported(this.scope.compilerOptions())) {
 				this.scope.enterEarlyConstructionContext();
 			}
 
 			// propagate to constructor call
 			if (this.constructorCall != null) {
 				flowInfo = this.constructorCall.analyseCode(this.scope, constructorContext, flowInfo);
-				if (mode == AnalysisMode.PROLOGUE && hasArgumentNeedingAnalysis)
-					this.prologueInfo = flowInfo.copy();
-				// if calling 'this(...)', then flag all non-static fields as definitely
-				// set since they are supposed to be set inside other local constructor
-				if (this.constructorCall.accessMode == ExplicitConstructorCall.This) {
-					FieldBinding[] fields = this.binding.declaringClass.fields();
-					for (FieldBinding field : fields) {
-						if (!field.isStatic()) {
-							flowInfo.markAsDefinitelyAssigned(field);
-						}
-					}
+				if (mode == AnalysisMode.PROLOGUE) {
+					if (hasArgumentNeedingAnalysis)
+						this.prologueInfo = flowInfo.copy();
+					return;
 				}
 			}
-
-			// reuse the reachMode from non static field info
-			flowInfo.setReachMode(nonStaticFieldInfoReachMode);
 		}
+		if (this.constructorCall != null && mode != AnalysisMode.PROLOGUE) {
+			markFieldsAsInitializedAfterThisCall(this.constructorCall, flowInfo);
+		}
+		// reuse the reachMode from non static field info
+		flowInfo.setReachMode(nonStaticFieldInfoReachMode);
 
 		// propagate to statements
 		if (this.statements != null) {
@@ -238,9 +237,13 @@ public void analyseCode(ClassScope classScope, InitializationFlowContext initial
 			int complaintLevel = (nonStaticFieldInfoReachMode & FlowInfo.UNREACHABLE) == 0 ? Statement.NOT_COMPLAINED : Statement.COMPLAINED_FAKE_REACHABLE;
 			for (Statement stat : this.statements) {
 				if (mode == AnalysisMode.REST && lateConstructorCall != null) {
-					if (stat == lateConstructorCall)	// if true this is where we start analysing
+					if (stat == lateConstructorCall) {	// if true this is where we start analysing
+						markFieldsAsInitializedAfterThisCall(lateConstructorCall, flowInfo);
 						lateConstructorCall = null; 	// no more checking for subsequent statements
+					}
 					continue;							// skip statements already processed during PROLOGUE analysis
+				} else if (mode == AnalysisMode.PROLOGUE && stat instanceof ExplicitConstructorCall ctorCall) {
+					complainAboutInitializedFinalFields(flowInfo, ctorCall);
 				}
 				if ((complaintLevel = stat.complainIfUnreachable(flowInfo, this.scope, complaintLevel, true)) < Statement.COMPLAINED_UNREACHABLE) {
 					flowInfo = stat.analyseCode(this.scope, constructorContext, flowInfo);
@@ -256,9 +259,8 @@ public void analyseCode(ClassScope classScope, InitializationFlowContext initial
 				}
 			}
 			if (mode == AnalysisMode.PROLOGUE) {
-				if (this.prologueInfo == null)		// don't overwrite info stored in the context of this.constructorCall
-					this.prologueInfo = flowInfo;	// keep for second iteration, also signals the need for REST analysis
-				return;								// we're done for this time
+				this.prologueInfo = flowInfo;	// keep for second iteration, also signals the need for REST analysis
+				return;							// we're done for this time
 			}
 		}
 	// check for missing returning path
@@ -293,6 +295,32 @@ public void analyseCode(ClassScope classScope, InitializationFlowContext initial
 		this.scope.checkUnclosedCloseables(flowInfo, null, null/*don't report against a specific location*/, null);
 	} catch (AbortMethod e) {
 		this.ignoreFurtherInvestigation = true;
+	}
+}
+
+private void markFieldsAsInitializedAfterThisCall(ExplicitConstructorCall call, FlowInfo flowInfo) {
+	if (call.accessMode == ExplicitConstructorCall.This) {
+		// if calling 'this(...)', then flag all non-static fields as definitely
+		// set since they are supposed to be set inside other local constructor
+		FieldBinding[] fields = this.binding.declaringClass.fields();
+		for (FieldBinding field : fields) {
+			if (!field.isStatic()) {
+				flowInfo.markAsDefinitelyAssigned(field);
+			}
+		}
+	}
+}
+
+private void complainAboutInitializedFinalFields(FlowInfo flowInfo, ExplicitConstructorCall call) {
+	if (call.accessMode == ExplicitConstructorCall.This) {
+		// if calling 'this(...)', complain about final fields that are already assigned
+		FieldBinding[] fields = this.binding.declaringClass.fields();
+		for (FieldBinding field : fields) {
+			if (field.isBlankFinal() && !field.isStatic()) {
+				if (flowInfo.isPotentiallyAssigned(field))
+					this.scope.problemReporter().duplicateInitializationOfBlankFinalField(field, call);
+			}
+		}
 	}
 }
 
@@ -510,7 +538,7 @@ private void internalGenerateCode(ClassScope classScope, ClassFile classFile) {
 			codeStream.recordPositionsFrom(0, this.bodyStart > 0 ? this.bodyStart : this.sourceStart);
 		}
 
-		if (JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES.matchesCompliance(this.scope.compilerOptions())) {
+		if (JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES.isSupported(this.scope.compilerOptions())) {
 			this.scope.enterEarlyConstructionContext();
 		}
 
@@ -758,23 +786,10 @@ public void resolveStatements() {
 				this.scope.problemReporter().cannotUseSuperInJavaLangObject(this.constructorCall);
 			}
 			this.constructorCall = null;
-		} else if (sourceType.isRecord() &&
-				!this.isCompactConstructor() && // compact constr should be marked as canonical?
-				(this.binding != null && !this.binding.isCanonicalConstructor()) &&
-				this.constructorCall.accessMode != ExplicitConstructorCall.This) {
-			this.scope.problemReporter().missingExplicitConstructorCallInNonCanonicalConstructor(this);
-			this.constructorCall = null;
 		} else {
-			ExplicitConstructorCall lateConstructorCall = null;
-			if (JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES.matchesCompliance(this.scope.compilerOptions())) {
-				this.scope.enterEarlyConstructionContext(); // even if no late ctor call to also capture arguments of ctor call as 1st stmt
-				lateConstructorCall = getLateConstructorCall();
-			}
-			if (lateConstructorCall != null) {
-				this.constructorCall = null; // not used with JEP 482, conversely, constructorCall!=null signals no JEP 482 context
-				this.scope.problemReporter().validateJavaFeatureSupport(JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES,
-						lateConstructorCall.sourceStart,
-						lateConstructorCall.sourceEnd);
+			this.scope.enterEarlyConstructionContext(); // even if no late ctor call to also capture arguments of ctor call as 1st stmt
+			if (getLateConstructorCall() != null) {
+				this.constructorCall = null; // not used with JEP 513, conversely, constructorCall!=null signals no JEP 513 context
 			} else {
 				this.constructorCall.resolve(this.scope);
 			}
@@ -787,7 +802,7 @@ public void resolveStatements() {
 }
 
 ExplicitConstructorCall getLateConstructorCall() {
-	if (!JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES.matchesCompliance(this.scope.compilerOptions()))
+	if (!JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES.isSupported(this.scope.compilerOptions()))
 		return null;
 	if (this.constructorCall != null && !this.constructorCall.isImplicitSuper()) {
 		return null;

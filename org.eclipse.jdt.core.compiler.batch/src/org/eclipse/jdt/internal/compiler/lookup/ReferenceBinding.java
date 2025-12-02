@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2024 IBM Corporation and others.
+ * Copyright (c) 2000, 2025 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -64,13 +64,11 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
-import org.eclipse.jdt.internal.compiler.ast.LambdaExpression;
 import org.eclipse.jdt.internal.compiler.ast.MethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.NullAnnotationMatching;
 import org.eclipse.jdt.internal.compiler.ast.RecordComponent;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
-import org.eclipse.jdt.internal.compiler.impl.ReferenceContext;
 
 /*
 Not all fields defined by this type (& its subclasses) are initialized when it is created.
@@ -1521,18 +1519,6 @@ private boolean isCompatibleWith0(TypeBinding otherType, /*@Nullable*/ Scope cap
 					return isCompatibleWith(otherLowerBound);
 				}
 			}
-			if (otherType instanceof InferenceVariable) {
-				// may interpret InferenceVariable as a joker, but only when within an outer lambda inference:
-				if (captureScope != null) {
-					MethodScope methodScope = captureScope.methodScope();
-					if (methodScope != null) {
-						ReferenceContext referenceContext = methodScope.referenceContext;
-						if (referenceContext instanceof LambdaExpression
-								&& ((LambdaExpression)referenceContext).inferenceContext != null)
-							return true;
-					}
-				}
-			}
 			//$FALL-THROUGH$
 		case Binding.GENERIC_TYPE :
 		case Binding.TYPE :
@@ -1833,18 +1819,6 @@ public final boolean isUsed() {
 	return (this.modifiers & ExtraCompilerModifiers.AccLocallyUsed) != 0;
 }
 
-/**
- * Answer true if the receiver is deprecated (or any of its enclosing types)
- */
-public final boolean isViewedAsDeprecated() {
-	if ((this.modifiers & (ClassFileConstants.AccDeprecated | ExtraCompilerModifiers.AccDeprecatedImplicitly)) != 0)
-		return true;
-	if (getPackage().isViewedAsDeprecated()) {
-		this.tagBits |= (getPackage().tagBits & TagBits.AnnotationTerminallyDeprecated);
-		return true;
-	}
-	return false;
-}
 public boolean isImplicitType() {
 	return false;
 }
@@ -2227,14 +2201,16 @@ protected int applyCloseableClassWhitelists(CompilerOptions options) {
 					}
 				}
 			}
-			for (int i=0; i<3; i++) {
-				if (!CharOperation.equals(this.compoundName[i], TypeConstants.ONE_UTIL_STREAMEX[i])) {
-					return 0;
+			streamex: {
+				for (int i=0; i<3; i++) {
+					if (!CharOperation.equals(this.compoundName[i], TypeConstants.ONE_UTIL_STREAMEX[i])) {
+						break streamex;
+					}
 				}
-			}
-			for (char[] streamName : TypeConstants.RESOURCE_FREE_CLOSEABLE_STREAMEX) {
-				if (CharOperation.equals(this.compoundName[3], streamName)) {
-					return TypeIds.BitResourceFreeCloseable;
+				for (char[] streamName : TypeConstants.RESOURCE_FREE_CLOSEABLE_STREAMEX) {
+					if (CharOperation.equals(this.compoundName[3], streamName)) {
+						return TypeIds.BitResourceFreeCloseable;
+					}
 				}
 			}
 			break;
@@ -2529,7 +2505,7 @@ public MethodBinding getSingleAbstractMethod(Scope scope, boolean replaceWildcar
 }
 
 // See JLS 4.9 bullet 1
-public static boolean isConsistentIntersection(TypeBinding[] intersectingTypes) {
+public static boolean isConsistentIntersection(TypeBinding[] intersectingTypes, boolean simulatingBugJDK8026527) {
 	TypeBinding[] ci = new TypeBinding[intersectingTypes.length];
 	for (int i = 0; i < ci.length; i++) {
 		TypeBinding current = intersectingTypes[i];
@@ -2542,9 +2518,9 @@ public static boolean isConsistentIntersection(TypeBinding[] intersectingTypes) 
 		// when invoked during type inference we only want to check inconsistency among real types:
 		if (current.isTypeVariable() || current.isWildcard() || !current.isProperType(true))
 			continue;
-		if (mostSpecific.isSubtypeOf(current, false))
+		if (mostSpecific.isSubtypeOf(current, simulatingBugJDK8026527))
 			continue;
-		else if (current.isSubtypeOf(mostSpecific, false))
+		else if (current.isSubtypeOf(mostSpecific, simulatingBugJDK8026527))
 			mostSpecific = current;
 		else
 			return false;
@@ -2558,7 +2534,7 @@ public ModuleBinding module() {
 }
 
 public boolean hasEnclosingInstanceContext() {
-	// This method intentionally disregards early construction contexts (JEP 482).
+	// This method intentionally disregards early construction contexts (JEP 513).
 	// Details of how each outer level is handled are coordinated in
 	// TypeDeclaration.manageEnclosingInstanceAccessIfNecessary().
 	if (isStatic())

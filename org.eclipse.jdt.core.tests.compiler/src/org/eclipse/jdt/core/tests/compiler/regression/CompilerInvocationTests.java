@@ -813,6 +813,7 @@ public void test011_problem_categories() {
 		expectedProblemAttributes.put("MaskedCatch", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
 		expectedProblemAttributes.put("MandatoryCloseNotShown", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
 		expectedProblemAttributes.put("MandatoryCloseNotShownAtExit", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
+		expectedProblemAttributes.put("MemberOfDeprecatedTypeNotDeprecated", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
 		expectedProblemAttributes.put("MessageSendWithUnresolvedOwningAnnotation", new ProblemAttributes(CategorizedProblem.CAT_INTERNAL));
 		expectedProblemAttributes.put("MethodButWithConstructorName", new ProblemAttributes(CategorizedProblem.CAT_CODE_STYLE));
 		expectedProblemAttributes.put("MethodCanBePotentiallyStatic", new ProblemAttributes(CategorizedProblem.CAT_CODE_STYLE));
@@ -849,7 +850,7 @@ public void test011_problem_categories() {
 		expectedProblemAttributes.put("MissingTypeInConstructor", new ProblemAttributes(CategorizedProblem.CAT_MEMBER));
 		expectedProblemAttributes.put("MissingTypeInLambda", new ProblemAttributes(CategorizedProblem.CAT_MEMBER));
 		expectedProblemAttributes.put("ModifierOnRequiresJavaBase", new ProblemAttributes(CategorizedProblem.CAT_MODULE));
-		expectedProblemAttributes.put("ModifierOnRequiresJavaBasePreview", new ProblemAttributes(CategorizedProblem.CAT_MODULE));
+		expectedProblemAttributes.put("ModifierTransitiveOnRequiresJavaBaseBelow25", new ProblemAttributes(CategorizedProblem.CAT_MODULE));
 		expectedProblemAttributes.put("MissingTypeForInference", new ProblemAttributes(CategorizedProblem.CAT_INTERNAL));
 		expectedProblemAttributes.put("UnterminatedTextBlock", new ProblemAttributes(CategorizedProblem.CAT_PREVIEW_RELATED));
 		expectedProblemAttributes.put("MissingTypeInMethod", new ProblemAttributes(CategorizedProblem.CAT_MEMBER));
@@ -1071,6 +1072,7 @@ public void test011_problem_categories() {
 		expectedProblemAttributes.put("SuperclassNotFound", DEPRECATED);
 		expectedProblemAttributes.put("SuperclassNotVisible", DEPRECATED);
 		expectedProblemAttributes.put("SuperfluousSemicolon", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
+		expectedProblemAttributes.put("SwitchExpressionMissingEnumConstantCaseDespiteDefault", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
 		expectedProblemAttributes.put("SwitchOnEnumNotBelow15", new ProblemAttributes(CategorizedProblem.CAT_TYPE));
 		expectedProblemAttributes.put("SwitchOnStringsNotBelow17", new ProblemAttributes(CategorizedProblem.CAT_TYPE));
 		expectedProblemAttributes.put("TargetTypeNotAFunctionalInterface", new ProblemAttributes(CategorizedProblem.CAT_TYPE));
@@ -1963,6 +1965,7 @@ public void test012_compiler_problems_tuning() {
 		expectedProblemAttributes.put("MaskedCatch", new ProblemAttributes(JavaCore.COMPILER_PB_HIDDEN_CATCH_BLOCK));
 		expectedProblemAttributes.put("MandatoryCloseNotShown", new ProblemAttributes(JavaCore.COMPILER_PB_POTENTIALLY_UNCLOSED_CLOSEABLE));
 		expectedProblemAttributes.put("MandatoryCloseNotShownAtExit", new ProblemAttributes(JavaCore.COMPILER_PB_POTENTIALLY_UNCLOSED_CLOSEABLE));
+		expectedProblemAttributes.put("MemberOfDeprecatedTypeNotDeprecated", new ProblemAttributes(JavaCore.COMPILER_PB_MEMBER_OF_DEPRECATED_TYPE));
 		expectedProblemAttributes.put("MessageSendWithUnresolvedOwningAnnotation", SKIP);
 		expectedProblemAttributes.put("MethodButWithConstructorName", new ProblemAttributes(JavaCore.COMPILER_PB_METHOD_WITH_CONSTRUCTOR_NAME));
 		expectedProblemAttributes.put("MethodCanBePotentiallyStatic", new ProblemAttributes(JavaCore.COMPILER_PB_POTENTIALLY_MISSING_STATIC_ON_METHOD));
@@ -1999,7 +2002,7 @@ public void test012_compiler_problems_tuning() {
 		expectedProblemAttributes.put("MissingTypeInConstructor", SKIP);
 		expectedProblemAttributes.put("MissingTypeInLambda", SKIP);
 		expectedProblemAttributes.put("ModifierOnRequiresJavaBase", SKIP);
-		expectedProblemAttributes.put("ModifierOnRequiresJavaBasePreview", SKIP);
+		expectedProblemAttributes.put("ModifierTransitiveOnRequiresJavaBaseBelow25", SKIP);
 		expectedProblemAttributes.put("UnterminatedTextBlock", SKIP);
 		expectedProblemAttributes.put("MissingTypeInMethod", SKIP);
 		expectedProblemAttributes.put("MissingTypeForInference", SKIP);
@@ -2222,6 +2225,7 @@ public void test012_compiler_problems_tuning() {
 		expectedProblemAttributes.put("SuperclassNotFound", SKIP);
 		expectedProblemAttributes.put("SuperclassNotVisible", new ProblemAttributes(JavaCore.COMPILER_PB_REDUNDANT_SUPERINTERFACE));
 		expectedProblemAttributes.put("SuperfluousSemicolon", new ProblemAttributes(JavaCore.COMPILER_PB_EMPTY_STATEMENT));
+		expectedProblemAttributes.put("SwitchExpressionMissingEnumConstantCaseDespiteDefault", new ProblemAttributes(JavaCore.COMPILER_PB_INCOMPLETE_ENUM_SWITCH));
 		expectedProblemAttributes.put("SwitchOnEnumNotBelow15", SKIP);
 		expectedProblemAttributes.put("SwitchOnStringsNotBelow17", SKIP);
 		expectedProblemAttributes.put("TargetTypeNotAFunctionalInterface", SKIP);

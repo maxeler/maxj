@@ -7147,7 +7147,7 @@ public class ASTConverter15JLS4Test extends ConverterTestSetup {
 	/*
 	 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=147875
 	 */
-	public void _2551_test0221() throws JavaModelException {
+	public void test0221() throws JavaModelException {
     	this.workingCopy = getWorkingCopy("/Converter15/src/X.java", true/*resolve*/);
     	String contents =
     		"import p1.p2.MyEnum;\n" +
@@ -8236,7 +8236,7 @@ public class ASTConverter15JLS4Test extends ConverterTestSetup {
 		expression = fragment.getInitializer();
 		assertEquals("Not a super method invocation", ASTNode.SUPER_METHOD_INVOCATION, expression.getNodeType());
 		methodInvocation = (SuperMethodInvocation) expression;
-		assertFalse("Wrong value", methodInvocation.isResolvedTypeInferredFromExpectedType());
+		assertTrue("Wrong value", methodInvocation.isResolvedTypeInferredFromExpectedType());
 	}
 
 	//https://bugs.eclipse.org/bugs/show_bug.cgi?id=174436
@@ -8485,7 +8485,20 @@ public class ASTConverter15JLS4Test extends ConverterTestSetup {
 				0);
 		assertEquals("Not a compilation unit", ASTNode.COMPILATION_UNIT, node.getNodeType());
 		CompilationUnit unit = (CompilationUnit) node;
-		assertProblemsSize(unit, 0);
+		assertProblems("unexpected problems",
+				"""
+				1. WARNING in /Converter15/src/X.java (at line 5)
+					@Annot(id=4)
+					 ^^^^^
+				The type Annot is deprecated
+				----------
+				2. WARNING in /Converter15/src/X.java (at line 8)
+					@Annot(id=4) class Y {
+					 ^^^^^
+				The type Annot is deprecated
+				----------
+				""",
+				unit.getProblems(), contents.toCharArray());
 		node = getASTNode(unit, 1);
 		assertEquals("Not a type declaration unit", ASTNode.TYPE_DECLARATION, node.getNodeType());
 		TypeDeclaration typeDeclaration = (TypeDeclaration) node;
@@ -8654,8 +8667,8 @@ public class ASTConverter15JLS4Test extends ConverterTestSetup {
 				0);
 		assertEquals("Not a compilation unit", ASTNode.COMPILATION_UNIT, node.getNodeType());
 		CompilationUnit unit = (CompilationUnit) node;
-		String expectedProblems = "";
-		assertProblemsSize(unit, 0, expectedProblems);
+		String expectedProblems = "The method annotationValue() from the type Annot is deprecated";
+		assertProblemsSize(unit, 1, expectedProblems);
 		node = getASTNode(unit, 3);
 		assertEquals("Not a type declaration unit", ASTNode.TYPE_DECLARATION, node.getNodeType());
 		TypeDeclaration typeDeclaration = (TypeDeclaration) node;
@@ -8861,12 +8874,12 @@ public class ASTConverter15JLS4Test extends ConverterTestSetup {
 				0);
 		assertEquals("Not a compilation unit", ASTNode.COMPILATION_UNIT, node.getNodeType());
 		CompilationUnit unit = (CompilationUnit) node;
-		String expectedErrors = "Constructor call must be the first statement in a constructor\n" +
+		String expectedErrors = "The Java feature 'Flexible Constructor Bodies' is only available with source level 25 and above\n" +
 		"zork cannot be resolved to a variable\n" +
-		"Constructor call must be the first statement in a constructor\n" +
+		"The Java feature 'Flexible Constructor Bodies' is only available with source level 25 and above\n" +
 		"Zork cannot be resolved to a type\n" +
 		"Zork cannot be resolved to a type\n" +
-		"Constructor call must be the first statement in a constructor";
+		"The Java feature 'Flexible Constructor Bodies' is only available with source level 25 and above";
 		assertProblemsSize(unit, 6, expectedErrors);
 		node = getASTNode(unit, 0, 1, 4);
 		assertEquals("Not a constructor invocation", ASTNode.CONSTRUCTOR_INVOCATION, node.getNodeType());
@@ -10958,7 +10971,7 @@ public class ASTConverter15JLS4Test extends ConverterTestSetup {
 		CompilationUnit unit= (CompilationUnit) buildAST(
 			contents,
 			this.workingCopy,
-			true,
+			false,
 			true,
 			true);
 		TypeDeclaration typeDeclaration = (TypeDeclaration) getASTNode(unit, 0);

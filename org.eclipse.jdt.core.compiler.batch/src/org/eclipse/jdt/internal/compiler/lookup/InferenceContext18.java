@@ -117,7 +117,7 @@ public class InferenceContext18 {
 	/** the invocation being inferred (for 18.5.1 and 18.5.2) */
 	InvocationSite currentInvocation;
 	/** arguments of #currentInvocation, if any */
-	Expression[] invocationArguments;
+	public Expression[] invocationArguments;
 
 	/** The inference variables for which as solution is sought. */
 	InferenceVariable[] inferenceVariables;
@@ -194,13 +194,12 @@ public class InferenceContext18 {
 	}
 
 	/** Construct an inference context for an invocation (method/constructor). */
-	public InferenceContext18(Scope scope, Expression[] arguments, InvocationSite site, InferenceContext18 outerContext) {
+	public InferenceContext18(Scope scope, Expression[] arguments, InvocationSite site) {
 		this.scope = scope;
 		this.environment = scope.environment();
 		this.object = scope.getJavaLangObject();
 		this.invocationArguments = arguments;
 		this.currentInvocation = site;
-		this.outerContext = outerContext;
 		if (site instanceof Invocation)
 			scope.compilationUnitScope().registerInferredInvocation((Invocation) site);
 	}
@@ -671,7 +670,7 @@ public class InferenceContext18 {
 						t = ConstraintExpressionFormula.findGroundTargetType(this, skope, lambda, withWildCards);
 					}
 					MethodBinding functionType;
-					if (t != null && (functionType = t.getSingleAbstractMethod(skope, true)) != null && (lambda = lambda.resolveExpressionExpecting(t, this.scope, this)) != null) {
+					if (t != null && (functionType = t.getSingleAbstractMethod(skope, true)) != null && (lambda = lambda.resolveExpressionExpecting(t, this.scope)) != null) {
 						TypeBinding r = functionType.returnType;
 						Expression[] resultExpressions = lambda.resultExpressions();
 						for (int i = 0, length = resultExpressions == null ? 0 : resultExpressions.length; i < length; i++) {
@@ -1014,20 +1013,19 @@ public class InferenceContext18 {
 	 * @throws InferenceFailureException a compile error has been detected during inference
 	 */
 	public /*@Nullable*/ BoundSet solve(boolean inferringApplicability) throws InferenceFailureException {
-		return solve(inferringApplicability, this.currentInvocation, false);
+		return solve(inferringApplicability, this.currentInvocation);
 	}
 	/**
 	 * Try to solve the inference problem defined by constraints and bounds previously registered.
 	 * @param inferringApplicability toggles between 18.5.1 and 18.5.2
 	 * @param location the current invocation (18.5.1 - 18.5.5)
-	 * @param isRecordPatternTypeInference true if location is actually a record pattern (18.5.5, see item 5)
 	 * @return a bound set representing the solution, or null if inference failed
 	 * @throws InferenceFailureException a compile error has been detected during inference
 	 */
-	private /*@Nullable*/ BoundSet solve(boolean inferringApplicability, InvocationSite location,
-			boolean isRecordPatternTypeInference) throws InferenceFailureException
+	private /*@Nullable*/ BoundSet solve(boolean inferringApplicability, Location location) throws InferenceFailureException
 	{
 		CapturingContext.enter(location.sourceStart(), location.sourceEnd(), this.scope);
+		boolean isRecordPatternTypeInference = location instanceof RecordPattern;
 
 		try {
 			if (!reduce())
@@ -1074,7 +1072,7 @@ public class InferenceContext18 {
 	/**
 	 * JLS 18.2. reduce all initial constraints
 	 */
-	private boolean reduce() throws InferenceFailureException {
+	public boolean reduce() throws InferenceFailureException {
 		// Caution: This can be reentered recursively even as an earlier call is munching through the constraints !
 		for (int i = 0; this.initialConstraints != null && i < this.initialConstraints.length; i++) {
 			final ConstraintFormula currentConstraint = this.initialConstraints[i];
@@ -1112,17 +1110,10 @@ public class InferenceContext18 {
 	public TypeBinding /*@Nullable*/[] getSolutions(TypeVariableBinding[] typeParameters, InvocationSite site, BoundSet boundSet) {
 		int len = typeParameters.length;
 		TypeBinding[] substitutions = new TypeBinding[len];
-		InferenceVariable[] outerVariables = null;
-		if (this.outerContext != null && this.outerContext.stepCompleted < TYPE_INFERRED)
-			outerVariables = this.outerContext.inferenceVariables;
 		for (int i = 0; i < typeParameters.length; i++) {
 			for (InferenceVariable variable : this.inferenceVariables) {
 				if (isSameSite(variable.site, site) && TypeBinding.equalsEquals(variable.typeParameter, typeParameters[i])) {
-					TypeBinding outerVar = null;
-					if (outerVariables != null && (outerVar = boundSet.getEquivalentOuterVariable(variable, outerVariables)) != null)
-						substitutions[i] = outerVar;
-					else
-						substitutions[i] = boundSet.getInstantiation(variable, this.environment);
+					substitutions[i] = boundSet.getInstantiation(variable, this.environment);
 					break;
 				}
 			}
@@ -1307,7 +1298,7 @@ public class InferenceContext18 {
 			}
 		}
 		IntersectionTypeBinding18 intersection = (IntersectionTypeBinding18) this.environment.createIntersectionType18(refGlbs);
-		if (ReferenceBinding.isConsistentIntersection(intersection.intersectingTypes))
+		if (ReferenceBinding.isConsistentIntersection(intersection.intersectingTypes, InferenceContext18.SIMULATE_BUG_JDK_8026527))
 			return intersection;
 		return null;
 	}
@@ -1408,19 +1399,15 @@ public class InferenceContext18 {
 	}
 
 	private ConstraintFormula pickFromCycle(Set<ConstraintFormula> c) {
-		// Detail from 18.5.2 bullet 6.1
-
 		// Note on performance: this implementation could quite possibly be optimized a lot.
 		// However, we only *very rarely* reach here,
 		// so nobody should really be affected by the performance penalty paid here.
 
-		// Note on spec conformance: the spec seems to require _all_ criteria (i)-(iv) to be fulfilled
-		// with the sole exception of (iii), which should only be used, if _any_ constraints matching (i) & (ii)
-		// also fulfill this condition.
-		// Experiments, however, show that strict application of the above is prone to failing to pick any constraint,
-		// causing non-termination of the algorithm.
-		// Since that is not acceptable, I'm *interpreting* the spec to request a search for a constraint
-		// that "best matches" the given conditions.
+		// from JLS 18.5.2.2 bullet 3.1 para 2:
+		//
+		// If this subset is empty, then there is a cycle (or cycles) in the graph of dependencies between constraints.
+		// In this case, the constraints in C that participate in a dependency cycle (or cycles) and
+		// do not depend on any constraints outside of the cycle (or cycles) are considered.
 
 		// collect all constraints participating in a cycle
 		HashMap<ConstraintFormula,Set<ConstraintFormula>> dependencies = new HashMap<>();
@@ -1448,10 +1435,10 @@ public class InferenceContext18 {
 		outside.removeAll(cycles);
 
 		Set<ConstraintFormula> candidatesII = new LinkedHashSet<>();
-		// (i): participates in a cycle:
+		// participates in a cycle:
 		candidates: for (ConstraintFormula candidate : cycles) {
 			Collection<InferenceVariable> infVars = candidate.inputVariables(this);
-			// (ii) does not depend on any constraints outside the cycle
+			// does not depend on any constraints outside the cycle
 			for (ConstraintFormula out : outside) {
 				if (dependsOn(infVars, out.outputVariables(this)))
 					continue candidates;
@@ -1461,62 +1448,39 @@ public class InferenceContext18 {
 		if (candidatesII.isEmpty())
 			candidatesII = c; // not spec'ed but needed to avoid returning null below, witness: java.util.stream.Collectors
 
-		// tentatively: (iii)  has the form ⟨Expression → T⟩
-		Set<ConstraintFormula> candidatesIII = new LinkedHashSet<>();
+		// JLS cntd:
+		// A single constraint is selected from these considered constraints, as follows:
+		// * If any of the considered constraints have the form ‹Expression → T›, then
+		//   the selected constraint is the considered constraint of this form that contains the expression
+		//   to the left (§3.5) of the expression of every other considered constraint of this form.
+		int minStart = Integer.MAX_VALUE;
+		ConstraintFormula leftMost = null;
 		for (ConstraintFormula candidate : candidatesII) {
-			if (candidate instanceof ConstraintExpressionFormula)
-				candidatesIII.add(candidate);
+			if (candidate instanceof ConstraintExpressionFormula cef && cef.left.sourceStart < minStart) {
+				minStart = cef.left.sourceStart;
+				leftMost = cef;
+			}
 		}
-		if (candidatesIII.isEmpty()) {
-			candidatesIII = candidatesII; // no constraint fulfills (iii) -> ignore this condition
-		} else { // candidatesIII contains all relevant constraints ⟨Expression → T⟩
-			// (iv) contains an expression that appears to the left of the expression
-			// 		of every other constraint satisfying the previous three requirements
+		if (leftMost != null)
+			return leftMost;
 
-			// collect containment info regarding all expressions in candidate constraints:
-			// (a) find minimal enclosing expressions:
-			Map<ConstraintExpressionFormula,ConstraintExpressionFormula> expressionContainedBy = new LinkedHashMap<>();
-			for (ConstraintFormula one : candidatesIII) {
-				ConstraintExpressionFormula oneCEF = (ConstraintExpressionFormula) one;
-				Expression exprOne = oneCEF.left;
-				for (ConstraintFormula two : candidatesIII) {
-					if (one == two) continue;
-					ConstraintExpressionFormula twoCEF = (ConstraintExpressionFormula) two;
-					Expression exprTwo = twoCEF.left;
-					if (doesExpressionContain(exprOne, exprTwo)) {
-						ConstraintExpressionFormula previous = expressionContainedBy.get(two);
-						if (previous == null || doesExpressionContain(previous.left, exprOne)) // only if improving
-							expressionContainedBy.put(twoCEF, oneCEF);
-					}
-				}
+		// JLS cntd:
+		// * If no considered constraint has the form ‹Expression → T›, then the selected constraint is the considered
+		//   constraint that contains the expression to the left of the expression of every other considered constraint.
+		for (ConstraintFormula candidate : candidatesII) {
+			// note: ConstraintExpressionFormula is the only shape left, which contains an expression
+			if (candidate instanceof ConstraintExceptionFormula cef && cef.left.sourceStart < minStart) {
+				minStart = cef.left.sourceStart;
+				leftMost = cef;
 			}
-			// (b) build the tree from the above
-			Map<ConstraintExpressionFormula,Set<ConstraintExpressionFormula>> containmentForest = new LinkedHashMap<>();
-			for (Map.Entry<ConstraintExpressionFormula, ConstraintExpressionFormula> parentRelation : expressionContainedBy.entrySet()) {
-				ConstraintExpressionFormula parent = parentRelation.getValue();
-				Set<ConstraintExpressionFormula> children = containmentForest.get(parent);
-				if (children == null)
-					containmentForest.put(parent, children = new LinkedHashSet<>());
-				children.add(parentRelation.getKey());
-			}
-
-			// approximate the spec by searching the largest containment tree:
-			int bestRank = -1;
-			ConstraintExpressionFormula candidate = null;
-			for (ConstraintExpressionFormula parent : containmentForest.keySet()) {
-				int rank = rankNode(parent, expressionContainedBy, containmentForest);
-				if (rank > bestRank) {
-					bestRank = rank;
-					candidate = parent;
-				}
-			}
-			if (candidate != null)
-				return candidate;
 		}
+		if (leftMost != null)
+			return leftMost;
 
-		if (candidatesIII.isEmpty())
+		// not spec'ed: random pick
+		if (candidatesII.isEmpty())
 			throw new IllegalStateException("cannot pick constraint from cyclic set"); //$NON-NLS-1$
-		return candidatesIII.iterator().next();
+		return candidatesII.iterator().next();
 	}
 
 	/**
@@ -1552,35 +1516,6 @@ public class InferenceContext18 {
 			}
 		}
 		return false;
-	}
-
-	/** Does exprOne lexically contain exprTwo? */
-	private boolean doesExpressionContain(Expression exprOne, Expression exprTwo) {
-		if (exprTwo.sourceStart > exprOne.sourceStart) {
-			return exprTwo.sourceEnd <= exprOne.sourceEnd;
-		} else if (exprTwo.sourceStart == exprOne.sourceStart) {
-			return exprTwo.sourceEnd < exprOne.sourceEnd;
-		}
-		return false;
-	}
-
-	/** non-roots answer -1, roots answer the size of the spanned tree */
-	private int rankNode(ConstraintExpressionFormula parent,
-			Map<ConstraintExpressionFormula,ConstraintExpressionFormula> expressionContainedBy,
-			Map<ConstraintExpressionFormula, Set<ConstraintExpressionFormula>> containmentForest)
-	{
-		if (expressionContainedBy.get(parent) != null)
-			return -1; // not a root
-		Set<ConstraintExpressionFormula> children = containmentForest.get(parent);
-		if (children == null)
-			return 1; // unconnected node or leaf
-		int sum = 1;
-		for (ConstraintExpressionFormula child : children) {
-			int cRank = rankNode(child, expressionContainedBy, containmentForest);
-			if (cRank > 0)
-				sum += cRank;
-		}
-		return sum;
 	}
 
 	private Set<ConstraintFormula> findBottomSet(Set<ConstraintFormula> constraints,
@@ -1995,7 +1930,7 @@ public class InferenceContext18 {
 		 */
 		BoundSet solution = null;
 		try {
-			solution = solve(false, new InvocationSite.EmptyWithAstNode(recordPattern), true);
+			solution = solve(false, recordPattern);
 		} catch (InferenceFailureException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -2071,13 +2006,9 @@ public class InferenceContext18 {
 		return true;
 	}
 	private TypeBinding deriveTPrime(RecordPattern recordPattern, TypeBinding candidateT, InferenceVariable[] alphas, TypeBinding typeBinding) {
-		ParameterizedTypeBinding parameterizedType = null;
-		TypeBinding tPrime = null;
-		if (candidateT.isParameterizedType()) {
-			parameterizedType = InferenceContext18.parameterizedWithWildcard(candidateT);
-		}
-		if (parameterizedType != null && parameterizedType.arguments != null) {
-			TypeBinding[] arguments = parameterizedType.capture(this.scope, recordPattern.sourceStart, recordPattern.sourceEnd).arguments;
+		TypeBinding tPrime = candidateT.capture(this.scope, recordPattern.sourceStart, recordPattern.sourceEnd);
+		if (tPrime instanceof ParameterizedTypeBinding parameterizedType && parameterizedType.arguments != null) {
+			TypeBinding[] arguments = parameterizedType.arguments;
 			/* addTypeVariableSubstitutions() gives a beta for every argument which is
 			 * a super set of betas required by 18_5_5_item_3_bullet_1 betas.
 			 * this happens since we are just reusing 18.5.2.1 utility
@@ -2085,13 +2016,13 @@ public class InferenceContext18 {
 			 * TODO: a Just18_5_5_item_3_bullet_1Betas utility?
 			 */
 			InferenceVariable[] notJust18_5_5_item_3_bullet_1Betas = addTypeVariableSubstitutions(arguments, true);
-			TypeVariableBinding[] typeVariables = getTPrimeArgumentsAndCreateBounds(parameterizedType,
+			TypeBinding[] typeArguments = getTPrimeArgumentsAndCreateBounds(parameterizedType,
 					notJust18_5_5_item_3_bullet_1Betas);
 			tPrime = this.environment.createParameterizedType(
-					parameterizedType.genericType(), typeVariables,
+					parameterizedType.genericType(), typeArguments,
 					parameterizedType.enclosingType(), parameterizedType.getTypeAnnotations());
-			createAdditionalBoundswithU((ParameterizedTypeBinding) tPrime, notJust18_5_5_item_3_bullet_1Betas, typeVariables);
-		} else if (candidateT.isTypeVariable() || candidateT.isIntersectionType18()) {
+			createAdditionalBoundswithU((ParameterizedTypeBinding) tPrime, notJust18_5_5_item_3_bullet_1Betas, typeArguments);
+		} else if (tPrime.isTypeVariable() || tPrime.isIntersectionType18()) {
 			// 18.5.5_item_3_bullet_3
 			/* If T is a type variable or an intersection type, then for each upper bound of the type
 			 * variable or element of the intersection type, this step and step 4 are repeated
@@ -2108,7 +2039,7 @@ public class InferenceContext18 {
 						return null;
 				}
 			}
-			return tPrime = candidateT; //18.5.5_item_3_bullet_2
+			return tPrime = candidateT; //18.5.5_item_3_bullet_4
 		} else if (candidateT.isClass() || candidateT.isInterface()) {
 			tPrime = candidateT; //18.5.5_item_3_bullet_2
 		}
@@ -2116,12 +2047,12 @@ public class InferenceContext18 {
 	}
 
 	private void createAdditionalBoundswithU(ParameterizedTypeBinding tPrime, InferenceVariable[] notJust18_5_5_item_3_bullet_1Betas,
-			TypeVariableBinding[] typeVariables) {
+			TypeBinding[] typeArguments) {
 		TypeVariableBinding[] typeParams = tPrime.original().typeVariables();
 		TypeBinding[] aArr = tPrime.typeArguments();
 		for (int i = 0, l = notJust18_5_5_item_3_bullet_1Betas.length; i < l; ++i) {
 			InferenceVariable beta = notJust18_5_5_item_3_bullet_1Betas[i];
-			if (beta == null || !beta.equals(typeVariables[i])) continue; //not an expected inference variable.
+			if (beta == null || !beta.equals(typeArguments[i])) continue; //not an expected inference variable.
 
 			TypeBinding[] uArr = typeParams[i]!= null ? typeParams[i].allUpperBounds() : null;
 			if (uArr == null || uArr.length == 0) {
@@ -2152,17 +2083,17 @@ public class InferenceContext18 {
 		}
 	}
 
-	private TypeVariableBinding[] getTPrimeArgumentsAndCreateBounds(
+	private TypeBinding[] getTPrimeArgumentsAndCreateBounds(
 			ParameterizedTypeBinding parameterizedType,
 			InferenceVariable[] beta) {
 		TypeBinding[] arguments = parameterizedType.typeArguments();
-		TypeVariableBinding[] typeVariables = new TypeVariableBinding[arguments.length];
+		TypeBinding[] typearguments = Arrays.copyOf(arguments, arguments.length);
 		InferenceSubstitution theta = new InferenceSubstitution(this.environment, beta, this.currentInvocation);
 		TypeBound bound;
 		for (int i = 0, l = arguments.length; i < l; ++i) {
 			bound = null;
-			if (arguments[i].kind() == Binding.WILDCARD_TYPE && beta[i] != null) {
-				WildcardBinding wildcard = (WildcardBinding) arguments[i];
+			if (arguments[i].getClass() == CaptureBinding.class && beta[i] != null) { // exclude subclass CaptureBinding18
+				WildcardBinding wildcard = ((CaptureBinding) arguments[i]).wildcard;
 				switch(wildcard.boundKind) {
 					case Wildcard.EXTENDS :
 						TypeBinding uTheta = Scope.substitute(theta, wildcard.allBounds());
@@ -2178,20 +2109,14 @@ public class InferenceContext18 {
 					default:
 						continue;
 				}
-			} else {
-				/* As per 18_5_5_item_3_bullet_1 should not have a beta here
-				 * instead the same typevariable  */
-				typeVariables[i] = parameterizedType.type.typeVariables()[i];
 			}
 			if (bound != null) {
 				this.currentBounds.addBound(bound, this.environment);
-				typeVariables[i] = beta[i];
-			} else {
-				typeVariables[i] = parameterizedType.type.typeVariables()[i];
+				typearguments[i] = beta[i];
 
 			}
 		}
-		return typeVariables;
+		return typearguments;
 	}
 
 	public boolean isInexactVarargsInference() {

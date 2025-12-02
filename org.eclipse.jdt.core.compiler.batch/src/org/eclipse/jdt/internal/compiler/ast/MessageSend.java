@@ -108,7 +108,6 @@ public class MessageSend extends Expression implements IPolyExpression, Invocati
 	 // hold on to this context from invocation applicability inference until invocation type inference (per method candidate):
 	private Map<ParameterizedGenericMethodBinding, InferenceContext18> inferenceContexts;
 	private HashMap<TypeBinding, MethodBinding> solutionsPerTargetType;
-	private InferenceContext18 outerInferenceContext; // resolving within the context of an outer (lambda) inference?
 
 	private boolean receiverIsType;
 	protected boolean argsContainCast;
@@ -1002,7 +1001,10 @@ public TypeBinding resolveType(BlockScope scope) {
 		}
 		// abstract private methods cannot occur nor abstract static............
 	}
-	if (isMethodUseDeprecated(this.binding, scope, true, this))
+	TypeBinding declared = this.binding.declaringClass.erasure();
+	TypeBinding actual = this.actualReceiverType.erasure();
+	boolean isExplicitUse = TypeBinding.equalsEquals( declared, actual);
+	if (isMethodUseDeprecated(this.binding, scope, isExplicitUse, this))
 		scope.problemReporter().deprecatedMethod(this.binding, this);
 
 	TypeBinding returnType;
@@ -1125,11 +1127,6 @@ protected TypeBinding handleNullnessCodePatterns(BlockScope scope, TypeBinding r
 }
 
 protected TypeBinding findMethodBinding(BlockScope scope) {
-	ReferenceContext referenceContext = scope.methodScope().referenceContext;
-	if (referenceContext instanceof LambdaExpression) {
-		this.outerInferenceContext = ((LambdaExpression) referenceContext).inferenceContext;
-	}
-
 	if (this.expectedType != null && this.binding instanceof PolyParameterizedGenericMethodBinding) {
 		this.binding = this.solutionsPerTargetType.get(this.expectedType);
 	}
@@ -1246,12 +1243,11 @@ public boolean isPolyExpression(MethodBinding resolutionCandidate) {
 		throw new UnsupportedOperationException("Unresolved MessageSend can't be queried if it is a polyexpression"); //$NON-NLS-1$
 
 	if (resolutionCandidate != null) {
-		if (resolutionCandidate instanceof ParameterizedGenericMethodBinding) {
-			ParameterizedGenericMethodBinding pgmb = (ParameterizedGenericMethodBinding) resolutionCandidate;
-			if (pgmb.inferredReturnType)
-				return true; // if already determined
-		}
-		if (resolutionCandidate.returnType != null) {
+		if (resolutionCandidate.returnType != null && resolutionCandidate.returnType.id != TypeIds.T_void) {
+			if (resolutionCandidate instanceof ParameterizedGenericMethodBinding pgmb) {
+				if (pgmb.wasInferred)
+					return true; // if already determined
+			}
 			// resolution may have prematurely instantiated the generic method, we need the original, though:
 			MethodBinding candidateOriginal = resolutionCandidate.original();
 			return candidateOriginal.returnType.mentionsAny(candidateOriginal.typeVariables(), -1);
@@ -1347,7 +1343,6 @@ public void cleanUpInferenceContexts() {
 			value.cleanUp();
 	}
 	this.inferenceContexts = null;
-	this.outerInferenceContext = null;
 	this.solutionsPerTargetType = null;
 }
 @Override
@@ -1361,7 +1356,7 @@ public ExpressionContext getExpressionContext() {
 // -- Interface InvocationSite: --
 @Override
 public InferenceContext18 freshInferenceContext(Scope scope) {
-	return new InferenceContext18(scope, this.arguments, this, this.outerInferenceContext);
+	return new InferenceContext18(scope, this.arguments, this);
 }
 @Override
 public boolean isQualifiedSuper() {
