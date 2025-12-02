@@ -2000,7 +2000,7 @@ void setSourceStart(int sourceStart);
 	int ConstNonNullFieldComparisonYieldsFalse = Internal + 945;
 	/** @since 3.21 */
 	int InheritedParameterLackingNonNullAnnotation = MethodRelated + 946;
-	/** @since 3.43 */
+	/** @since 3.44*/
 	int RecordComponentIncompatibleNullnessVsInheritedAccessor = MethodRelated + 947;
 
 	/** @since 3.10 */
@@ -2899,7 +2899,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.43
+	 * @since 3.44
 	 */
     // NOTE:
 	// 80000 from messages.properties is chosen semi-arbitrary.
@@ -2914,7 +2914,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.43
+	 * @since 3.44
 	 */
     // NOTE:
 	// 80001 from messages.properties is chosen semi-arbitrary.
@@ -2929,7 +2929,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.43
+	 * @since 3.44
 	 */
     // NOTE:
 	// 80002 from messages.properties is chosen semi-arbitrary.
@@ -2944,7 +2944,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.43
+	 * @since 3.44
 	 */
     // NOTE:
 	// 80003 from messages.properties is chosen semi-arbitrary.
@@ -2960,7 +2960,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.43
+	 * @since 3.44
 	 */
     // NOTE:
 	// 80004 from messages.properties is chosen semi-arbitrary.
@@ -2972,7 +2972,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.43
+	 * @since 3.44
 	 */
     // NOTE:
 	// 80005 from messages.properties is chosen semi-arbitrary.
@@ -2986,7 +2986,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.43
+	 * @since 3.44
 	 */
     // NOTE:
 	// 80006 from messages.properties is chosen semi-arbitrary.
@@ -3011,7 +3011,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Using non void return type for overloaded put method
-	 * @since 3.43
+	 * @since 3.44
 	 */
     // NOTE:
 	// 80006 from messages.properties is chosen semi-arbitrary.

@@ -409,7 +409,7 @@ public class CompilerOptions {
 	public static final int UnusedLambdaParameter = IrritantSet.GROUP3 | ASTNode.Bit3;
 	public static final int MemberOfDeprecatedType = IrritantSet.GROUP3 | ASTNode.Bit4;
 
-	public static final int MaxelerOverloadedPut = IrritantSet.GROUP3 | ASTNode.Bit4;
+	public static final int MaxelerOverloadedPut = IrritantSet.GROUP3 | ASTNode.Bit5;
 	//public static final int MaxelerAssertStatement = IrritantSet.GROUP3 | ASTNode.Bit5;
 
 

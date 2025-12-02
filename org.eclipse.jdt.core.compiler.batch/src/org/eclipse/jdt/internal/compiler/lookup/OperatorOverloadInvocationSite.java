@@ -32,7 +32,7 @@ public abstract class OperatorOverloadInvocationSite implements Invocation {
 
 	@Override
 	public InferenceContext18 freshInferenceContext(Scope scope) {
-		return new InferenceContext18(scope, this.arguments(), this, null);
+		return new InferenceContext18(scope, this.arguments(), this);
 	}
 
 	@Override
