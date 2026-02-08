@@ -1334,9 +1334,7 @@ public void generateLogicalAnd(BlockScope currentScope, CodeStream codeStream, b
 		}
 	}
 	// default case
-	boolean custom = (TypeBinding.notEquals(this.right.resolvedType, TypeBinding.BOOLEAN) && this.right.resolvedType.id != TypeIds.T_JavaLangBoolean)
-		|| (TypeBinding.notEquals(this.left.resolvedType, TypeBinding.BOOLEAN) && this.left.resolvedType.id != TypeIds.T_JavaLangBoolean);
-	if (custom) {
+	if (this.appropriateMethodForOverload != null) {
 		generateOperatorOverloadCode(currentScope, codeStream, valueRequired);
 	} else {
 		this.left.generateCode(currentScope, codeStream, valueRequired);
@@ -1388,9 +1386,7 @@ public void generateLogicalOr(BlockScope currentScope, CodeStream codeStream, bo
 		}
 	}
 	// default case
-	boolean custom = (TypeBinding.notEquals(this.right.resolvedType, TypeBinding.BOOLEAN) && this.right.resolvedType.id != TypeIds.T_JavaLangBoolean)
-		|| (TypeBinding.notEquals(this.left.resolvedType, TypeBinding.BOOLEAN) && this.left.resolvedType.id != TypeIds.T_JavaLangBoolean);
-	if (custom) {
+	if (this.appropriateMethodForOverload != null) {
 		generateOperatorOverloadCode(currentScope, codeStream, valueRequired);
 	} else {
 		this.left.generateCode(currentScope, codeStream, valueRequired);
@@ -1446,11 +1442,9 @@ public void generateLogicalXor(BlockScope currentScope,	CodeStream codeStream, b
 		}
 	}
 	// default case
-	boolean custom = (TypeBinding.notEquals(this.right.resolvedType, TypeBinding.BOOLEAN) && this.right.resolvedType.id != TypeIds.T_JavaLangBoolean)
-		|| (TypeBinding.notEquals(this.left.resolvedType, TypeBinding.BOOLEAN) && this.left.resolvedType.id != TypeIds.T_JavaLangBoolean);
-	if (custom) {
+	if (this.appropriateMethodForOverload != null) {
 		generateOperatorOverloadCode(currentScope, codeStream, valueRequired);
-	} else{
+	} else {
 		this.left.generateCode(currentScope, codeStream, valueRequired);
 		this.right.generateCode(currentScope, codeStream, valueRequired);
 		if (valueRequired) {
@@ -1548,31 +1542,25 @@ public void generateOptimizedLogicalAnd(BlockScope currentScope, CodeStream code
 		}
 	}
 	// default case
-	boolean custom = (TypeBinding.notEquals(this.right.resolvedType, TypeBinding.BOOLEAN) && this.right.resolvedType.id != TypeIds.T_JavaLangBoolean)
-		|| (TypeBinding.notEquals(this.left.resolvedType, TypeBinding.BOOLEAN) && this.left.resolvedType.id != TypeIds.T_JavaLangBoolean);
-	if (custom) {
+	if (this.appropriateMethodForOverload != null) {
 		generateOperatorOverloadCode(currentScope, codeStream, valueRequired);
 	} else {
 		this.left.generateCode(currentScope, codeStream, valueRequired);
 		this.right.generateCode(currentScope, codeStream, valueRequired);
-	}
-	if (valueRequired) {
-		if (custom) {
-			codeStream.ineg();
-		} else {
+		if (valueRequired) {
 			codeStream.iand();
-		}
-		if (falseLabel == null) {
-			if (trueLabel != null) {
-				// implicit falling through the FALSE case
-				codeStream.ifne(trueLabel);
-			}
-		} else {
-			// implicit falling through the TRUE case
-			if (trueLabel == null) {
-				codeStream.ifeq(falseLabel);
+			if (falseLabel == null) {
+				if (trueLabel != null) {
+					// implicit falling through the FALSE case
+					codeStream.ifne(trueLabel);
+				}
 			} else {
-				// no implicit fall through TRUE/FALSE --> should never occur
+				// implicit falling through the TRUE case
+				if (trueLabel == null) {
+					codeStream.ifeq(falseLabel);
+				} else {
+					// no implicit fall through TRUE/FALSE --> should never occur
+				}
 			}
 		}
 	}
@@ -1667,31 +1655,25 @@ public void generateOptimizedLogicalOr(BlockScope currentScope, CodeStream codeS
 		}
 	}
 	// default case
-	boolean custom = (TypeBinding.notEquals(this.right.resolvedType, TypeBinding.BOOLEAN) && this.right.resolvedType.id != TypeIds.T_JavaLangBoolean)
-		|| (TypeBinding.notEquals(this.left.resolvedType, TypeBinding.BOOLEAN) && this.left.resolvedType.id != TypeIds.T_JavaLangBoolean);
-	if (custom) {
+	if (this.appropriateMethodForOverload != null) {
 		generateOperatorOverloadCode(currentScope, codeStream, valueRequired);
 	} else {
 		this.left.generateCode(currentScope, codeStream, valueRequired);
 		this.right.generateCode(currentScope, codeStream, valueRequired);
-	}
-	if (valueRequired) {
-		if (custom) {
-			codeStream.ineg();
-		} else {
+		if (valueRequired) {
 			codeStream.ior();
-		}
-		if (falseLabel == null) {
-			if (trueLabel != null) {
-				// implicit falling through the FALSE case
-				codeStream.ifne(trueLabel);
-			}
-		} else {
-			// implicit falling through the TRUE case
-			if (trueLabel == null) {
-				codeStream.ifeq(falseLabel);
+			if (falseLabel == null) {
+				if (trueLabel != null) {
+					// implicit falling through the FALSE case
+					codeStream.ifne(trueLabel);
+				}
 			} else {
-				// no implicit fall through TRUE/FALSE --> should never occur
+				// implicit falling through the TRUE case
+				if (trueLabel == null) {
+					codeStream.ifeq(falseLabel);
+				} else {
+					// no implicit fall through TRUE/FALSE --> should never occur
+				}
 			}
 		}
 	}
@@ -1770,31 +1752,25 @@ public void generateOptimizedLogicalXor(BlockScope currentScope, CodeStream code
 		}
 	}
 	// default case
-	boolean custom = (TypeBinding.notEquals(this.right.resolvedType, TypeBinding.BOOLEAN) && this.right.resolvedType.id != TypeIds.T_JavaLangBoolean)
-		|| (TypeBinding.notEquals(this.left.resolvedType, TypeBinding.BOOLEAN) && this.left.resolvedType.id != TypeIds.T_JavaLangBoolean);
-	if (custom) {
+	if (this.appropriateMethodForOverload != null) {
 		generateOperatorOverloadCode(currentScope, codeStream, valueRequired);
 	} else {
 		this.left.generateCode(currentScope, codeStream, valueRequired);
 		this.right.generateCode(currentScope, codeStream, valueRequired);
-	}
-	if (valueRequired) {
-		if (custom) {
-			codeStream.ineg();
-		} else {
+		if (valueRequired) {
 			codeStream.ixor();
-		}
-		if (falseLabel == null) {
-			if (trueLabel != null) {
-				// implicit falling through the FALSE case
-				codeStream.ifne(trueLabel);
-			}
-		} else {
-			// implicit falling through the TRUE case
-			if (trueLabel == null) {
-				codeStream.ifeq(falseLabel);
+			if (falseLabel == null) {
+				if (trueLabel != null) {
+					// implicit falling through the FALSE case
+					codeStream.ifne(trueLabel);
+				}
 			} else {
-				// no implicit fall through TRUE/FALSE --> should never occur
+				// implicit falling through the TRUE case
+				if (trueLabel == null) {
+					codeStream.ifeq(falseLabel);
+				} else {
+					// no implicit fall through TRUE/FALSE --> should never occur
+				}
 			}
 		}
 	}
