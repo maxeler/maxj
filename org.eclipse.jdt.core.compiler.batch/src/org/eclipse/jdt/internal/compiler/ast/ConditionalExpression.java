@@ -520,6 +520,10 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 						scope.problemReporter().invalidOrMissingOverloadedOperator(this, getMethodName(),
 								this.valueIfTrue.resolvedType, this.valueIfFalse.resolvedType);
 						return null;
+					} else {
+						// emulate the effects of resolveTypeExpecting() if necessary
+						scope.problemReporter().typeMismatchError(conditionType, TypeBinding.BOOLEAN, this, null);
+						conditionType = null;
 					}
 				}
 			}
