@@ -45465,12 +45465,17 @@ public void test1357() {
 				"}\n", // =================
 			},
 			"----------\n" +
-			"1. ERROR in X.java (at line 8)\n" +
+			"1. ERROR in X.java (at line 7)\n" +
+			"	@Ann(X.Private.class) // Private is not visible here\n" +
+			"	     ^^^^^^^^^\n" +
+			"The type X.Private is not visible\n" +
+			"----------\n" +
+			"2. ERROR in X.java (at line 8)\n" +
 			"	public abstract class X implements Map<X.Private,Secondary.SecondaryPrivate> {\n" +
 			"	                                       ^^^^^^^^^\n" +
 			"The type X.Private is not visible\n" +
 			"----------\n" +
-			"2. ERROR in X.java (at line 8)\n" +
+			"3. ERROR in X.java (at line 8)\n" +
 			"	public abstract class X implements Map<X.Private,Secondary.SecondaryPrivate> {\n" +
 			"	                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
 			"The type Secondary.SecondaryPrivate is not visible\n" +
@@ -49611,7 +49616,7 @@ public void test1463() {
 		"1. ERROR in BaseType.java (at line 4)\n" +
 		"	interface SubType<T extends BaseType & java.io.Closeable> extends BaseType {\n" +
 		"	                  ^\n" +
-		"The inherited method Object.clone() cannot hide the public abstract method in BaseType\n" +
+		"The inherited method Object.clone() cannot reduce the visibility of the public abstract method in BaseType\n" +
 		"----------\n");
 }
 // https://bugs.eclipse.org/bugs/show_bug.cgi?id=319603

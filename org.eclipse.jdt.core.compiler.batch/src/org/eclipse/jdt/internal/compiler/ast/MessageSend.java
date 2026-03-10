@@ -498,7 +498,7 @@ private FlowInfo analyseNullAssertion(BlockScope currentScope, Expression argume
 		{
 			FieldBinding field = ((Reference)argument).lastFieldBinding();
 			if (field != null && (field.type.tagBits & TagBits.IsBaseType) == 0) {
-				flowContext.recordNullCheckedFieldReference((Reference) argument, 3); // survive this assert as a MessageSend and as a Statement
+				flowContext.recordNullCheckedFieldReference((Reference) argument, 3, FlowInfo.NON_NULL); // survive this assert as a MessageSend and as a Statement
 			}
 		}
 	}
@@ -1244,10 +1244,6 @@ public boolean isPolyExpression(MethodBinding resolutionCandidate) {
 
 	if (resolutionCandidate != null) {
 		if (resolutionCandidate.returnType != null && resolutionCandidate.returnType.id != TypeIds.T_void) {
-			if (resolutionCandidate instanceof ParameterizedGenericMethodBinding pgmb) {
-				if (pgmb.wasInferred)
-					return true; // if already determined
-			}
 			// resolution may have prematurely instantiated the generic method, we need the original, though:
 			MethodBinding candidateOriginal = resolutionCandidate.original();
 			return candidateOriginal.returnType.mentionsAny(candidateOriginal.typeVariables(), -1);

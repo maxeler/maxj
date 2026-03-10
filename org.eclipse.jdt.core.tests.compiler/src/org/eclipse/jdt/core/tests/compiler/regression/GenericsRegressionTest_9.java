@@ -1664,6 +1664,39 @@ public void testIssue4503_matches_with_javac() {
 			"Unhandled exception type Throwable\n" +
 			"----------\n");
 }
+public void testGH4715() {
+	runConformTest(new String[] {
+		"TestMain.java",
+		"""
+		import java.util.Map;
+		import java.util.Map.Entry;
+		import java.util.Set;
+		import java.util.stream.Collectors;
+
+		public class TestMain {
+			public static void main(String[] args) {
+				final Map<String, Set<String>> pathToPIDMap = Map.ofEntries(
+						Map.entry("i1", Set.of("PID1")),
+						Map.entry("i1,i2", Set.of("PID2"))
+						);
+
+				final Map<Boolean, Map<String, Set<String>>> partitiionedPathToPIDSet = pathToPIDMap.entrySet().stream() // Error 3
+					.collect(Collectors.partitioningBy(entry -> {
+						final Set<String> pidSet = entry.getValue();
+						final boolean isSinglePIDSet = pidSet.size() == 1;
+						return isSinglePIDSet;
+					}, Collectors.mapping(entry -> {
+						final String path = entry.getKey();
+						final Set<String> pidSet = entry.getValue();
+
+						return Map.entry(path, pidSet);
+					}, Collectors.toMap(Entry::getKey, Entry::getValue)))); //Errors 1 and 2
+			}
+		}
+
+		"""
+	});
+}
 public void testGH4533() {
 	runConformTest(new String[] {
 		"X.java",
@@ -1854,6 +1887,191 @@ public void testIssue4550() {
 		"The method getStuff() is undefined for the type T\n" +
 		"----------\n"
 		);
+}
+
+public void testGH4635() {
+	runConformTest(new String[] {
+		"Test.java",
+		"""
+		import java.util.stream.Stream;
+		import java.util.Objects;
+		public class Test {
+		    static class Obj<T> {
+		    }
+
+		    public static void main(String[] args) {
+		        String arg = "";
+
+		        Stream<Obj<?>> stream11 = Stream.of(newObj());
+		        Stream<Obj<?>> stream21 = Stream.of(newObj2(arg));
+
+		        Stream<Obj<?>> stream12 = Stream.of(newObj(), newObj());
+		        Stream<Obj<?>> stream22 = Stream.of(newObj2(arg), newObj2(arg));
+
+		        //Stream<Obj<?>> stream11f = Stream.of(newObj()).filter(Objects::nonNull); // javac & eclipse KO
+		        //Stream<Obj<?>> stream21f = Stream.of(newObj2(arg)).filter(Objects::nonNull); // javac & eclipse KO
+
+		        Stream<Obj<?>> stream12f = Stream.of(newObj(), newObj()).filter(Objects::nonNull);
+		        Stream<Obj<?>> stream22f = Stream.of(newObj2(arg), newObj2(arg)).filter(Objects::nonNull); // javac OK, eclipse KO
+		    }
+
+		    public static Obj<?> newObj() {
+		        return new Obj<>();
+		    }
+
+		    public static <T> Obj<?> newObj2(T arg) {
+		        return new Obj<>();
+		    }
+		}
+		"""
+
+	});
+}
+public void testGH4604() {
+	runConformTest(new String[] {
+			"X.java",
+			"""
+			import java.util.concurrent.*;
+			import java.util.stream.*;
+			public class X {
+				public static void main(String[] args) {
+					CompletableFuture.allOf(Stream.of(1)
+						.map(value -> future(value))
+						.toArray(CompletableFuture[]::new));
+				}
+
+				public static <T> CompletableFuture<?> future(T t) {
+					return CompletableFuture.completedFuture(t);
+				}
+			}
+			"""
+		});
+}
+public void testGH4699_1() {
+	if (this.complianceLevel < ClassFileConstants.JDK10) return; // uses 'var'
+	runConformTest(new String[] {
+			"EclipseBug.java",
+			"""
+			public class EclipseBug {
+				void error1() {
+					var someObject = getObject(); // <<--- Compiler complains here
+				}
+				private SomeObject<? extends SomeType<?, ? extends SpecialLocation>, ? extends SpecialLocation, ?> getObject() {
+					return null;
+				}
+				static interface SomeLocation { }
+				static interface SpecialLocation extends SomeLocation { }
+
+				static interface SomeType<O extends SomeObject<? extends SomeType<?, L>, L, ? extends SomeObject<?, ?, ?>>, L extends SomeLocation> { }
+
+				public interface SomeObject<T extends SomeType<?, L>, L extends SomeLocation, P extends SomeObject<?, ?, ?>> { }
+			}
+			"""
+		});
+}
+public void testGH4699_full() {
+	if (this.complianceLevel < ClassFileConstants.JDK10) return; // uses 'var'
+	runConformTest(new String[] {
+			"EclipseBug.java",
+			"""
+			public class EclipseBug {
+
+				void error1() {
+					var someObject = getObject();
+				}
+
+				void error2(SomeObject<? extends SomeType<?, ? extends SpecialLocation>, ? extends SpecialLocation, ?> theObject) {
+					method(theObject);
+				}
+
+				void error3(SomeObject<? extends SomeType<?, ? extends SpecialLocation>, ? extends SpecialLocation, ?> theObject) {
+					SomeObject<? extends SomeType<?, ? extends SpecialLocation>, ? extends SpecialLocation, ?> theObject2 = theObject;
+				}
+
+				void method(SomeObject<? extends SomeType<?, ? extends SpecialLocation>, ? extends SpecialLocation, ?> theObject) { }
+
+				private SomeObject<? extends SomeType<?, ? extends SpecialLocation>, ? extends SpecialLocation, ?> getObject() {
+					return null;
+				}
+
+				static interface SomeLocation { }
+				static interface SpecialLocation extends SomeLocation { }
+				static interface SomeType<O extends SomeObject<? extends SomeType<?, L>, L, ? extends SomeObject<?, ?, ?>>, L extends SomeLocation> { }
+				public interface SomeObject<T extends SomeType<?, L>, L extends SomeLocation, P extends SomeObject<?, ?, ?>> { }
+			}
+			"""
+		});
+}
+
+public void testGH4810() {
+	runConformTest(new String[] {
+			"Repro.java",
+			"""
+			import java.util.concurrent.Callable;
+			public class Repro {
+				Object test() {
+					try {
+						return myMethod(new MyCallable<>() {
+							@Override
+							public Object call() {
+								return new Object();
+							}
+						});
+					} catch (Exception e) {
+						e.printStackTrace();
+						return null;
+					}
+				}
+				<T, E extends Exception> T myMethod(MyCallable<T, E> callable) throws E {
+					return callable.call();
+				}
+			}
+			interface MyCallable<U, F extends Exception> extends Callable<U> {
+				@Override
+				U call() throws F;
+			}
+			"""
+	});
+}
+
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4864
+// Cannot infer type arguments with ecj 3.44.0 but not with 3.43.0
+public void testIssue4864() {
+	runConformTest(new String[] {
+			"X.java",
+			"""
+			import java.util.Locale;
+
+			public class X {
+
+				interface TypeConverter<T> {
+					T convert(String s) throws Exception;
+				}
+
+				class EnumConverter<E extends Enum<E>> implements TypeConverter<E> {
+					private Class<E> clazz;
+
+					EnumConverter(Class<E> clazz) {
+						this.clazz = clazz;
+					}
+
+					@Override
+					public E convert(String s) {
+						return valueOf(clazz, s);
+					}
+
+					<T extends Enum<T>> T valueOf(Class<T> enumType, String name) {
+						return Enum.valueOf(enumType, name.toUpperCase(Locale.ENGLISH));
+					}
+				}
+
+				TypeConverter<?> findCompatibleConverter(Class<?> clazz) {
+					EnumConverter<? extends Enum> converter = new EnumConverter<>(clazz.asSubclass(Enum.class));
+					return converter;
+				}
+			}
+			"""
+	});
 }
 
 public static Class<GenericsRegressionTest_9> testClass() {

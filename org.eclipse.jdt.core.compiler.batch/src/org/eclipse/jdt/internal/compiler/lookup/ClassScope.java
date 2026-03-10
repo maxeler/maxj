@@ -1387,9 +1387,10 @@ public class ClassScope extends Scope {
 
 	void connectTypeHierarchy() {
 		SourceTypeBinding sourceType = this.referenceContext.binding;
+		boolean previousFlag = environment().enterSuperTypeLookup(sourceType);
 		if ((sourceType.tagBits & TagBits.BeginHierarchyCheck) == 0) {
 			sourceType.tagBits |= TagBits.BeginHierarchyCheck;
-			environment().typesBeingConnected.add(sourceType);
+			preprocessTypeVariables(this.referenceContext.binding.typeVariables, this.referenceContext.typeParameters);
 			boolean noProblems = connectSuperclass();
 			noProblems &= connectSuperInterfaces();
 			if ((sourceType.typeBits & (TypeIds.BitAutoCloseable|TypeIds.BitCloseable)) != 0) {
@@ -1412,6 +1413,7 @@ public class ClassScope extends Scope {
 			throw e;
 		} finally {
 			env.missingClassFileLocation = null;
+			env.root.isResolvingSuperType = previousFlag;
 		}
 	}
 
@@ -1429,17 +1431,21 @@ public class ClassScope extends Scope {
 		SourceTypeBinding sourceType = this.referenceContext.binding;
 		if ((sourceType.tagBits & TagBits.BeginHierarchyCheck) != 0)
 			return;
-
-		sourceType.tagBits |= TagBits.BeginHierarchyCheck;
-		environment().typesBeingConnected.add(sourceType);
-		boolean noProblems = connectSuperclass();
-		noProblems &= connectSuperInterfaces();
-		environment().typesBeingConnected.remove(sourceType);
-		sourceType.tagBits |= TagBits.EndHierarchyCheck;
-		noProblems &= connectTypeVariables(this.referenceContext.typeParameters, false);
-		sourceType.tagBits |= TagBits.TypeVariablesAreConnected;
-		if (noProblems && sourceType.isHierarchyInconsistent())
-			problemReporter().hierarchyHasProblems(sourceType);
+		boolean previousFlag = environment().enterSuperTypeLookup(sourceType);
+		try {
+			sourceType.tagBits |= TagBits.BeginHierarchyCheck;
+			preprocessTypeVariables(this.referenceContext.binding.typeVariables, this.referenceContext.typeParameters);
+			boolean noProblems = connectSuperclass();
+			noProblems &= connectSuperInterfaces();
+			environment().typesBeingConnected.remove(sourceType);
+			sourceType.tagBits |= TagBits.EndHierarchyCheck;
+			noProblems &= connectTypeVariables(this.referenceContext.typeParameters, false);
+			sourceType.tagBits |= TagBits.TypeVariablesAreConnected;
+			if (noProblems && sourceType.isHierarchyInconsistent())
+				problemReporter().hierarchyHasProblems(sourceType);
+		} finally {
+			environment().root.isResolvingSuperType = previousFlag;
+		}
 	}
 
 	public boolean detectHierarchyCycle(TypeBinding superType, TypeReference reference) {

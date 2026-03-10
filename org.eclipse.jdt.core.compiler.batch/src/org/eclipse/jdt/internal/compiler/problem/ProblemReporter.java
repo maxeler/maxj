@@ -3671,7 +3671,7 @@ private void inheritedMethodReducesVisibility(int sourceStart, int sourceEnd, Me
 		.append('.')
 		.append(concreteMethod.shortReadableName());
 	this.handle(
-		// The inherited method %1 cannot hide the public abstract method in %2
+		// The inherited method %1 cannot reduce the visibility of the public abstract method in %2
 		IProblem.InheritedMethodReducesVisibility,
 		new String[] {
 			concreteSignature.toString(),
@@ -12613,6 +12613,14 @@ public void dimensionsIllegalOnRecordPattern(int sourceStart, int sourceEnd) {
 			NoArgument,
 			sourceStart,
 			sourceEnd);
+}
+public void cyclicNonNullByDefault(ReferenceBinding annotation) {
+	String[] arguments = { String.valueOf(annotation.readableName()) };
+	this.handle(IProblem.CyclicStructureNonNullByDefault,
+			arguments,
+			arguments,
+			ProblemSeverities.Warning | ProblemSeverities.InternalError,
+			0, 0);
 }
 public boolean scheduleProblemForContext(Runnable problemComputation) {
 	if (this.referenceContext != null) {

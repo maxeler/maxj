@@ -2890,6 +2890,13 @@ protected void consumeEnterAnonymousClassBody(boolean qualified) {
 	super.consumeEnterAnonymousClassBody(qualified);
 }
 @Override
+protected void consumeEnterMemberValueArrayInitializer() {
+	if(this.currentElement != null) {
+		this.currentElement.foundOpeningBrace = true;
+		super.consumeEnterMemberValueArrayInitializer();
+	}
+}
+@Override
 protected void consumeEnterVariable() {
 	this.identifierPtr--;
 	this.identifierLengthPtr--;
@@ -4292,7 +4299,7 @@ protected void consumeToken(TerminalToken token) {
 			case TokenNameIdentifier:
 				if (this.inReferenceExpression)
 					break;
-				if (JavaFeature.SWITCH_EXPRESSIONS.isSupported(this.scanner.complianceLevel, this.previewEnabled)
+				if (JavaFeature.SWITCH_EXPRESSIONS.isSupported(this.scanner.complianceLevel, isPreviewEnabled())
 						&& isInsideSwitch() && checkYieldKeyword()) {
 					pushOnElementStack(K_YIELD_KEYWORD);
 					// Take the short cut here.

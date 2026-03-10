@@ -15,6 +15,7 @@
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import java.util.*;
+import java.util.Map.Entry;
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.TypeConstants.BoundCheckStatus;
@@ -94,23 +95,22 @@ public class InferenceContext18 {
 	public final static boolean DEBUG = false;
 	public final static boolean DEBUG_FINE = false;
 
-	/** to conform with javac regarding https://bugs.openjdk.java.net/browse/JDK-8026527 */
+	/** NON-JLS: to conform with javac regarding https://bugs.openjdk.java.net/browse/JDK-8026527 */
 	static final boolean SIMULATE_BUG_JDK_8026527 = true;
 
-	/** Temporary workaround until we know fully what to do with https://bugs.openjdk.java.net/browse/JDK-8054721
-	 *  It looks likely that we have a bug independent of this JLS bug in that we clear the capture bounds eagerly.
-	*/
+	/** NON-JLS: Temporary workaround until we know fully what to do with https://bugs.openjdk.java.net/browse/JDK-8054721 */
 	static final boolean SHOULD_WORKAROUND_BUG_JDK_8054721 = true; // See https://bugs.eclipse.org/bugs/show_bug.cgi?id=437444#c24 onwards
 
-	static final boolean SHOULD_WORKAROUND_BUG_JDK_8153748 = true; // emulating javac behaviour after private email communication
+	static final boolean SHOULD_WORKAROUND_BUG_JDK_8153748 = true; // NON-JLS emulating javac behaviour after private email communication
 
 	/**
-	 * Detail flag to control the extent of {@link #SIMULATE_BUG_JDK_8026527}.
-	 * A setting of 'false' implements the advice from http://mail.openjdk.java.net/pipermail/lambda-spec-experts/2013-December/000447.html
+	 * NON-JLS: Detail flag to control the extent of {@link #SIMULATE_BUG_JDK_8026527}.
+	 * A setting of 'false' would implement the advice from http://mail.openjdk.java.net/pipermail/lambda-spec-experts/2013-December/000447.html
 	 * i.e., raw types are not considered as compatible in constraints/bounds derived from invocation arguments,
 	 * but only for constraints derived from type variable bounds.
+	 * NON-JLS: Unfortunately, 'true' is required by GenericsRegressionTest.test434118()
 	 */
-	static final boolean ARGUMENT_CONSTRAINTS_ARE_SOFT = false;
+	static final boolean ARGUMENT_CONSTRAINTS_ARE_SOFT = true;
 
 	// --- Main State of the Inference: ---
 
@@ -151,11 +151,11 @@ public class InferenceContext18 {
 	ReferenceBinding object; // java.lang.Object
 	public BoundSet b2;
 	private BoundSet b3;
-	/** Not per JLS: inbox for emulation of how javac passes type bounds from inner to outer */
+	/** NON-JLS: inbox for emulation of how javac passes type bounds from inner to outer */
 	private BoundSet innerInbox;
-	/** Not per JLS: signal when current is ready to directly merge all bounds from inner. */
+	/** NON-JLS: signal when current is ready to directly merge all bounds from inner. */
 	private boolean directlyAcceptingInnerBounds = false;
-	/** Not per JLS: pushing bounds from inner to outer may have to be deferred till after overload resolution, store here a runnable to perform the push. */
+	/** NON-JLS: pushing bounds from inner to outer may have to be deferred till after overload resolution, store here a runnable to perform the push. */
 	private Runnable pushToOuterJob = null;
 	// the following two flags control to what degree we continue with incomplete information:
 	private boolean isInexactVarargsInference = false;
@@ -184,12 +184,15 @@ public class InferenceContext18 {
 		InferenceVariable[] inferenceVariables;
 		int inferenceKind;
 		boolean usesUncheckedConversion;
-		SuspendedInferenceRecord(InvocationSite site, Expression[] invocationArguments, InferenceVariable[] inferenceVariables, int inferenceKind, boolean usesUncheckedConversion) {
+		HashMap<ParameterizedTypeBinding, ParameterizedTypeBinding> captures;
+		SuspendedInferenceRecord(InvocationSite site, Expression[] invocationArguments, InferenceVariable[] inferenceVariables, int inferenceKind, boolean usesUncheckedConversion, HashMap<ParameterizedTypeBinding,ParameterizedTypeBinding> captures) {
 			this.site = site;
 			this.invocationArguments = invocationArguments;
 			this.inferenceVariables = inferenceVariables;
 			this.inferenceKind = inferenceKind;
 			this.usesUncheckedConversion = usesUncheckedConversion;
+			if (captures != null)
+				this.captures = new LinkedHashMap<>(captures);
 		}
 	}
 
@@ -425,12 +428,13 @@ public class InferenceContext18 {
 			if (!addConstraintsToC(this.invocationArguments, c, method, this.inferenceKind, invocationSite))
 				return null;
 			// 5. bullet: determine B4 from C
-			List<Set<InferenceVariable>> components = this.currentBounds.computeConnectedComponents(this.inferenceVariables);
 			while (!c.isEmpty()) {
+				Map<InferenceVariable,Set<InferenceVariable>> dependencies = collectDependencies(this.currentBounds, false, new boolean[1]);
+				List<Set<InferenceVariable>> components = new ArrayList<>(dependencies.values());
 				// *
 				Set<ConstraintFormula> bottomSet = findBottomSet(c, allOutputVariables(c), components);
 				if (bottomSet.isEmpty()) {
-					bottomSet.add(pickFromCycle(c));
+					bottomSet.add(pickFromCycle(c, dependencies));
 				}
 				// *
 				c.removeAll(bottomSet);
@@ -460,6 +464,12 @@ public class InferenceContext18 {
 					if (!this.currentBounds.reduceOneConstraint(this, constraint))
 						return null;
 				}
+				for (ConstraintFormula constraint : bottomSet) {
+					// https://bugs.openjdk.org/browse/JDK-8052325
+					if (constraint instanceof ConstraintExpressionFormula expressionFormula && expressionFormula.left instanceof LambdaExpression lambda && lambda.argumentsTypeElided()) {
+						addLambdaConstraintsToC(lambda, c, method, expressionFormula.right);
+					}
+				}
 			}
 			// 6. bullet: solve
 			BoundSet solution = solve();
@@ -478,24 +488,24 @@ public class InferenceContext18 {
 		}
 	}
 
-	// ---  not per JLS: emulate how javac passes type bounds from inner to outer: ---
-	/** Not per JLS: push current bounds to outer inference if outer is ready for it. */
+	// ---  NON-JLS: emulate how javac passes type bounds from inner to outer: ---
+	/** NON-JLS: push current bounds to outer inference if outer is ready for it. */
 	private void pushBoundsToOuter() {
 		pushBoundsTo(this.outerContext);
 	}
 
-	/** Not per JLS: invent more bubbling up of inner bounds. */
+	/** NON-JLS: invent more bubbling up of inner bounds. */
 	public void pushBoundsTo(InferenceContext18 outer) {
 		if (outer != null && outer.stepCompleted >= APPLICABILITY_INFERRED) {
 			boolean deferred = outer.currentInvocation instanceof Invocation; // need to wait till after overload resolution?
 			BoundSet toPush = deferred ? this.currentBounds.copy() : this.currentBounds;
 			Runnable job = () -> {
 				if (outer.directlyAcceptingInnerBounds) {
-					outer.currentBounds.addBounds(toPush, this.environment);
+					outer.currentBounds.addBounds(toPush, this.environment, false);
 				} else if (outer.innerInbox == null) {
 					outer.innerInbox = deferred ? toPush : toPush.copy(); // copy now, unless already copied on behalf of 'deferred'
 				} else {
-					outer.innerInbox.addBounds(toPush, this.environment);
+					outer.innerInbox.addBounds(toPush, this.environment, false);
 				}
 			};
 			if (deferred) {
@@ -505,17 +515,17 @@ public class InferenceContext18 {
 			}
 		}
 	}
-	/** Not JLS: after overload resolution is done, perform the push of type bounds to outer inference, if any. */
+	/** NON-JLS: after overload resolution is done, perform the push of type bounds to outer inference, if any. */
 	public void flushBoundOutbox() {
 		if (this.pushToOuterJob != null) {
 			this.pushToOuterJob.run();
 			this.pushToOuterJob = null;
 		}
 	}
-	/** Not JLS: merge pending bounds of inner inference into current. */
+	/** NON-JLS: merge pending bounds of inner inference into current. */
 	private void mergeInnerBounds() {
 		if (this.innerInbox != null) {
-			this.currentBounds.addBounds(this.innerInbox, this.environment);
+			this.currentBounds.addBounds(this.innerInbox, this.environment, false);
 			this.innerInbox = null;
 		}
 	}
@@ -523,7 +533,7 @@ public class InferenceContext18 {
 	interface InferenceOperation {
 		boolean perform() throws InferenceFailureException;
 	}
-	/** Not per JLS: if operation succeeds merge new bounds from inner into current. */
+	/** NON-JLS: if operation succeeds merge new bounds from inner into current. */
 	private boolean collectingInnerBounds(InferenceOperation operation) throws InferenceFailureException {
 		boolean result = operation.perform();
 		if (result)
@@ -537,7 +547,7 @@ public class InferenceContext18 {
 	private ReductionResult addJDK_8153748ConstraintsFromInvocation(Expression[] arguments, MethodBinding method, InferenceSubstitution substitution)
 			throws InferenceFailureException
 	{
-		// not per JLS, trying to mimic javac behavior
+		// NON-JLS, trying to mimic javac behavior
 		boolean constraintAdded = false;
 		if (arguments != null) {
 			for (int i = 0; i < arguments.length; i++) {
@@ -645,11 +655,36 @@ public class InferenceContext18 {
 		return true;
 	}
 
+	private boolean addLambdaConstraintsToC(LambdaExpression lambda, Set<ConstraintFormula> c, MethodBinding method, TypeBinding substF)
+			throws InferenceFailureException
+	{
+		// https://bugs.openjdk.java.net/browse/JDK-8038747
+		BlockScope skope = lambda.enclosingScope;
+		if (substF.isFunctionalInterface(skope)) { // could be an inference variable.
+			ReferenceBinding t = (ReferenceBinding) substF;
+			ParameterizedTypeBinding withWildCards = InferenceContext18.parameterizedWithWildcard(t);
+			if (withWildCards != null) {
+				t = ConstraintExpressionFormula.findGroundTargetType(this, skope, lambda, withWildCards);
+			}
+			MethodBinding functionType;
+			if (t != null && (functionType = t.getSingleAbstractMethod(skope, true)) != null && (lambda = lambda.resolveExpressionExpecting(t, this.scope)) != null) {
+				TypeBinding r = functionType.returnType;
+				Expression[] resultExpressions = lambda.resultExpressions();
+				for (int i = 0, length = resultExpressions == null ? 0 : resultExpressions.length; i < length; i++) {
+					Expression resultExpression = resultExpressions[i];
+					if (!addConstraintsToC_OneExpr(resultExpression, c, r.original(), r, method))
+						return false;
+				}
+			}
+		}
+		return true;
+	}
+
 	private boolean addConstraintsToC_OneExpr(Expression expri, Set<ConstraintFormula> c, TypeBinding fsi, TypeBinding substF, MethodBinding method)
 			throws InferenceFailureException
 	{
 		boolean substFIsProperType = substF.isProperType(true);
-		// -- not per JLS, emulate javac behavior:
+		// -- NON-JLS, emulate javac behavior:
 		substF = Scope.substitute(getResultSubstitution(this.b3), substF);
 		// --
 
@@ -659,27 +694,9 @@ public class InferenceContext18 {
 		}
 		if (expri instanceof FunctionalExpression) {
 			c.add(new ConstraintExceptionFormula((FunctionalExpression) expri, substF));
-			if (expri instanceof LambdaExpression) {
-				// https://bugs.openjdk.java.net/browse/JDK-8038747
-				LambdaExpression lambda = (LambdaExpression) expri;
-				BlockScope skope = lambda.enclosingScope;
-				if (substF.isFunctionalInterface(skope)) { // could be an inference variable.
-					ReferenceBinding t = (ReferenceBinding) substF;
-					ParameterizedTypeBinding withWildCards = InferenceContext18.parameterizedWithWildcard(t);
-					if (withWildCards != null) {
-						t = ConstraintExpressionFormula.findGroundTargetType(this, skope, lambda, withWildCards);
-					}
-					MethodBinding functionType;
-					if (t != null && (functionType = t.getSingleAbstractMethod(skope, true)) != null && (lambda = lambda.resolveExpressionExpecting(t, this.scope)) != null) {
-						TypeBinding r = functionType.returnType;
-						Expression[] resultExpressions = lambda.resultExpressions();
-						for (int i = 0, length = resultExpressions == null ? 0 : resultExpressions.length; i < length; i++) {
-							Expression resultExpression = resultExpressions[i];
-							if (!addConstraintsToC_OneExpr(resultExpression, c, r.original(), r, method))
-								return false;
-						}
-					}
-				}
+			// https://bugs.openjdk.org/browse/JDK-8052325
+			if (expri instanceof LambdaExpression lambda && !lambda.argumentsTypeElided()) {
+				addLambdaConstraintsToC(lambda, c, method, substF);
 			}
 		} else if (expri instanceof Invocation && expri.isPolyExpression()) {
 
@@ -709,7 +726,6 @@ public class InferenceContext18 {
 				if (!innerContext.computeB3(invocation, substF, shallowMethod))
 					return false;
 				if (innerContext.addConstraintsToC(arguments, c, innerMethod.genericMethod(), innerContext.inferenceKind, invocation)) {
-					this.currentBounds.addBounds(innerContext.currentBounds, this.environment);
 					return true;
 				}
 				return false;
@@ -1135,6 +1151,13 @@ public class InferenceContext18 {
 	private /*@Nullable*/ BoundSet resolve(
 			InferenceVariable[] toResolve,
 			boolean isRecordPatternTypeInference) throws InferenceFailureException {
+		return resolve(toResolve, isRecordPatternTypeInference, true);
+	}
+	private /*@Nullable*/ BoundSet resolve(
+			InferenceVariable[] toResolve,
+			boolean isRecordPatternTypeInference,
+			boolean maySkipSuperBound) throws InferenceFailureException {
+
 		this.captureId = 0;
 		// NOTE: 18.5.2 ...
 		// "(While it was necessary to demonstrate that the inference variables in B1 could be resolved
@@ -1142,19 +1165,33 @@ public class InferenceContext18 {
 		// For this reason, resolve works on a temporary bound set, copied before any modification.
 		BoundSet tmpBoundSet = this.currentBounds;
 		if (this.inferenceVariables != null) {
+			Set<InferenceVariable> toResolveSet = new LinkedHashSet<>(Arrays.asList(toResolve));
 			// find a minimal set of dependent variables:
 			Set<InferenceVariable> variableSet;
-			while ((variableSet = getSmallestVariableSet(tmpBoundSet, toResolve)) != null) {
+			boolean[] hasSkippedSuperBound = { false };
+			while ((variableSet = getSmallestVariableSet(tmpBoundSet, toResolveSet, maySkipSuperBound, hasSkippedSuperBound)) != null) {
 				int oldNumUninstantiated = tmpBoundSet.numUninstantiatedVariables(this.inferenceVariables);
 				final int numVars = variableSet.size();
 				if (numVars > 0) {
 					final InferenceVariable[] variables = variableSet.toArray(new InferenceVariable[numVars]);
+					// NON-JLS: prioritize ivars in 'inThrows' as those may pull in new information by extra rule below (=RuntimeException)
+					BoundSet tSet = tmpBoundSet;
+					Arrays.sort(variables, (v1, v2) -> {
+						int r1 = tSet.inThrows.contains(v1) ? -1 : 0;
+						int r2 = tSet.inThrows.contains(v2) ? -1 : 0;
+						return r1 - r2;
+					});
+					//
 					variables: if (!isRecordPatternTypeInference && !tmpBoundSet.hasCaptureBound(variableSet)) {
 						// try to instantiate this set of variables in a fresh copy of the bound set:
 						BoundSet prevBoundSet = tmpBoundSet;
 						tmpBoundSet = tmpBoundSet.copy();
 						for (int j = 0; j < variables.length; j++) {
 							InferenceVariable variable = variables[j];
+							if (tmpBoundSet.isInstantiated(variable)) { // NON-JLS: may happen when exception bound has been incorporated
+								toResolveSet.remove(variable);
+								continue;
+							}
 							// try lower bounds:
 							TypeBinding[] lowerBounds = tmpBoundSet.lowerBounds(variable, true/*onlyProper*/);
 							if (lowerBounds != Binding.NO_TYPES) {
@@ -1168,6 +1205,11 @@ public class InferenceContext18 {
 								if (tmpBoundSet.inThrows.contains(variable.prototype()) && tmpBoundSet.hasOnlyTrivialExceptionBounds(variable, upperBounds)) {
 									TypeBinding runtimeException = this.scope.getType(TypeConstants.JAVA_LANG_RUNTIMEEXCEPTION, 3);
 									tmpBoundSet.addBound(new TypeBound(variable, runtimeException, ReductionResult.SAME), this.environment);
+									// NON-JLS: propagate RuntimeException to equivalent ivars:
+									if (!tmpBoundSet.incorporate(this)) {
+										tmpBoundSet = prevBoundSet;// clean-up for second attempt
+										break variables;
+									}
 								} else {
 									// try upper bounds:
 									TypeBinding glb = this.object;
@@ -1193,11 +1235,14 @@ public class InferenceContext18 {
 									tmpBoundSet.addBound(new TypeBound(variable, glb, ReductionResult.SAME), this.environment);
 								}
 							}
+							toResolveSet.remove(variable);
 						}
 						if (tmpBoundSet.incorporate(this))
 							continue;
 						tmpBoundSet = prevBoundSet;// clean-up for second attempt
 					}
+					if (maySkipSuperBound && hasSkippedSuperBound[0])
+						return resolve(toResolve, isRecordPatternTypeInference, false);
 					// Otherwise, a second attempt is made...
 					Sorting.sortInferenceVariables(variables); // ensure stability of capture IDs
 					final CaptureBinding18[] zs = new CaptureBinding18[numVars];
@@ -1216,7 +1261,7 @@ public class InferenceContext18 {
 						@Override
 						public TypeBinding substitute(TypeVariableBinding typeVariable) {
 							for (int j = 0; j < numVars; j++)
-								if (TypeBinding.equalsEquals(variables[j], typeVariable))
+								if (TypeBinding.equalsEquals(variables[j], typeVariable) && zs[j] != null)
 									return zs[j];
 							/* If we have an instantiation, lower it to the instantiation. We don't want downstream abstractions to be confused about multiple versions of bounds without
 							   and with instantiations propagated by incorporation. See https://bugs.eclipse.org/bugs/show_bug.cgi?id=430686. There is no value whatsoever in continuing
@@ -1234,40 +1279,75 @@ public class InferenceContext18 {
 					for (int j = 0; j < numVars; j++) {
 						InferenceVariable variable = variables[j];
 						CaptureBinding18 zsj = zs[j];
-						// add lower bounds:
-						TypeBinding[] lowerBounds = tmpBoundSet.lowerBounds(variable, true/*onlyProper*/);
-						if (lowerBounds != Binding.NO_TYPES) {
-							TypeBinding lub = this.scope.lowerUpperBound(lowerBounds);
-							if (lub != TypeBinding.VOID && lub != null)
-								zsj.lowerBound = lub;
+						// NON-JLS: leverage existing same bounds if they become proper by substitution:
+						boolean typeboundCreated = false;
+						TypeBinding[] sameBounds = tmpBoundSet.sameBounds(variable);
+						if (sameBounds != Binding.NO_TYPES) {
+							int l = 0;
+							for (int k = 0; k < sameBounds.length; k++) {
+								TypeBinding subst = Scope.substitute(theta, sameBounds[k]);
+								if (subst.isProperType(true))
+									sameBounds[l++] = subst;
+							}
+							if (l > 0) {
+								if (l < sameBounds.length)
+									sameBounds = Arrays.copyOf(sameBounds, l);
+								sameBounds = Scope.greaterLowerBound(sameBounds, this.scope, this.environment);
+								if (sameBounds != null && sameBounds.length == 1) {
+									tmpBoundSet.addBound(new TypeBound(variable, sameBounds[0], ReductionResult.SAME), this.environment);
+									typeboundCreated = true;
+									zs[j] = null;
+								}
+							}
 						}
-						// add upper bounds:
-						TypeBinding[] upperBounds = tmpBoundSet.upperBounds(variable, false/*onlyProper*/);
-						if (upperBounds != Binding.NO_TYPES) {
-							for (int k = 0; k < upperBounds.length; k++)
-								upperBounds[k] = Scope.substitute(theta, upperBounds[k]);
-							if (!setUpperBounds(zsj, upperBounds))
-								continue; // at violation of well-formedness skip this candidate and proceed
+						//
+						if (!typeboundCreated) {
+							// if no same bounds found, proceed as specified in JLS:
+							// add lower bounds:
+							TypeBinding[] lowerBounds = tmpBoundSet.lowerBounds(variable, true/*onlyProper*/);
+							if (lowerBounds != Binding.NO_TYPES) {
+								TypeBinding lub = this.scope.lowerUpperBound(lowerBounds);
+								if (lub != TypeBinding.VOID && lub != null)
+									zsj.lowerBound = lub;
+							}
+							// add upper bounds:
+							TypeBinding[] upperBounds = tmpBoundSet.upperBounds(variable, false/*onlyProper*/);
+							if (upperBounds != Binding.NO_TYPES) {
+								for (int k = 0; k < upperBounds.length; k++)
+									upperBounds[k] = Scope.substitute(theta, upperBounds[k]);
+								if (!setUpperBounds(zsj, upperBounds))
+									continue; // at violation of well-formedness skip this candidate and proceed
+							} else {
+								zsj.setSuperClass(this.object);
+							}
 						}
-//						}
 						if (tmpBoundSet == this.currentBounds)
 							tmpBoundSet = tmpBoundSet.copy();
 						Iterator<ParameterizedTypeBinding> captureKeys = tmpBoundSet.captures.keySet().iterator();
-						Set<ParameterizedTypeBinding> toRemove = new LinkedHashSet<>();
 						while (captureKeys.hasNext()) {
 							ParameterizedTypeBinding key = captureKeys.next();
 							int len = key.arguments.length;
 							for (int i = 0; i < len; i++) {
 								if (TypeBinding.equalsEquals(key.arguments[i], variable)) {
-									toRemove.add(key);
+									captureKeys.remove();
 									break;
 								}
 							}
 						}
-						captureKeys = toRemove.iterator();
-						while (captureKeys.hasNext())
-							tmpBoundSet.captures.remove(captureKeys.next());
-						tmpBoundSet.addBound(new TypeBound(variable, zsj, ReductionResult.SAME), this.environment);
+						captureKeys = tmpBoundSet.allCaptures.keySet().iterator();
+						while (captureKeys.hasNext()) {
+							ParameterizedTypeBinding key = captureKeys.next();
+							int len = key.arguments.length;
+							for (int i = 0; i < len; i++) {
+								if (TypeBinding.equalsEquals(key.arguments[i], variable)) {
+									captureKeys.remove();
+									break;
+								}
+							}
+						}
+						if (!typeboundCreated)
+							tmpBoundSet.addBound(new TypeBound(variable, zsj, ReductionResult.SAME), this.environment);
+						toResolveSet.remove(variable);
 					}
 					if (tmpBoundSet.incorporate(this)) {
 						if (tmpBoundSet.numUninstantiatedVariables(this.inferenceVariables) == oldNumUninstantiated)
@@ -1352,16 +1432,15 @@ public class InferenceContext18 {
 	 * Find the smallest set of uninstantiated inference variables not depending
 	 * on any uninstantiated variable outside the set.
 	 */
-	private Set<InferenceVariable> getSmallestVariableSet(BoundSet bounds, InferenceVariable[] subSet) {
+	public Set<InferenceVariable> getSmallestVariableSet(BoundSet bounds, Set<InferenceVariable> subSet, boolean maySkipSuperBound, boolean[] hasSkippedSuperBound) {
 		// "Given a set of inference variables to resolve, let V be the union of this set and
 		//  all variables upon which the resolution of at least one variable in this set depends."
-		Set<InferenceVariable> v = new LinkedHashSet<>();
-		Map<InferenceVariable,Set<InferenceVariable>> dependencies = new HashMap<>(); // compute only once, store for the final loop over 'v'.
+		Set<InferenceVariable> v = new LinkedHashSet<>(subSet);
+		Map<InferenceVariable,Set<InferenceVariable>> dependencies = collectDependencies(bounds, maySkipSuperBound, hasSkippedSuperBound);
 		for (InferenceVariable iv : subSet) {
-			Set<InferenceVariable> tmp = new LinkedHashSet<>();
-			addDependencies(bounds, tmp, iv);
-			dependencies.put(iv, tmp);
-			v.addAll(tmp);
+			Set<InferenceVariable> tmp = dependencies.get(iv);
+			if (tmp != null)
+				v.addAll(tmp);
 		}
 		// "If every variable in V has an instantiation, then resolution succeeds and this procedure terminates."
 		//  -> (implicit if result remains unassigned)
@@ -1370,35 +1449,141 @@ public class InferenceContext18 {
 		Set<InferenceVariable> result = null;
 		// "i) for all i (1 ≤ i ≤ n), ..."
 		for (InferenceVariable currentVariable : v) {
-			if (!bounds.isInstantiated(currentVariable)) {
-				// "... if αi depends on the resolution of a variable β, then either β has an instantiation or there is some j such that β = αj; ..."
-				Set<InferenceVariable> set = dependencies.get(currentVariable);
-				if (set == null) // not an element of the original subSet, still need to fetch this var's dependencies
-					addDependencies(bounds, set = new LinkedHashSet<>(), currentVariable);
-				//  "... and ii) there exists no non-empty proper subset of { α1, ..., αn } with this property."
-				int cur = set.size();
-				if (cur == 1)
-					return set; // won't get smaller
-				if (cur < min) {
-					result = set;
-					min = cur;
-				}
+			if (bounds.isInstantiated(currentVariable))
+				continue;
+			// "... if αi depends on the resolution of a variable β, then either β has an instantiation or there is some j such that β = αj; ..."
+			Set<InferenceVariable> set = dependencies.get(currentVariable);
+			// -> β contained in set by construction of 'dependencies'
+			// -> β has an instantiation removed from set below
+			//  "... and ii) there exists no non-empty proper subset of { α1, ..., αn } with this property."
+			// -> find a smallest among candidate sets:
+			if (set == null) {
+				return Collections.singleton(currentVariable);
+			}
+			for (Iterator<InferenceVariable> iter = set.iterator(); iter.hasNext();) {
+				InferenceVariable iv = iter.next();
+				if (bounds.isInstantiated(iv))
+					iter.remove();
+			}
+			int cur = set.size();
+			if (cur == 1)
+				return set; // won't get smaller
+			if (cur < min) {
+				result = set;
+				min = cur;
 			}
 		}
 		return result;
 	}
 
-	private void addDependencies(BoundSet boundSet, Set<InferenceVariable> variableSet, InferenceVariable currentVariable) {
-		if (boundSet.isInstantiated(currentVariable)) return; // not added
-		if (!variableSet.add(currentVariable)) return; // already present
-		for (InferenceVariable nextVariable : this.inferenceVariables) {
-			if (TypeBinding.equalsEquals(nextVariable, currentVariable)) continue;
-			if (boundSet.dependsOnResolutionOf(currentVariable, nextVariable))
-				addDependencies(boundSet, variableSet, nextVariable);
+	/**
+	 * Collect dependencies of all our ivars based on TypeBounds of 'bounds'
+	 * @param bounds consider all its TypeBounds
+	 * @param maySkipSuperBound if true, then α :> β bounds will not be treated as a dependency from α to β (only the inverse)
+	 * @param hasSkippedSuperBound output parameter to signal to the caller if maySkipSuperBound has been used
+	 * @return a map from an ivar to the set of all its dependencies including itself.
+	 */
+	Map<InferenceVariable,Set<InferenceVariable>> collectDependencies(BoundSet bounds, boolean maySkipSuperBound, boolean[] hasSkippedSuperBound) {
+		// Implements the definition of dependencies from JLS §18.4:
+		Map<InferenceVariable,Set<InferenceVariable>> dependsOn = new LinkedHashMap<>();
+		// "An inference variable α depends on the resolution of itself."
+		for (InferenceVariable iv : this.inferenceVariables) {
+			Set<InferenceVariable> selfSet = new LinkedHashSet<>();
+			selfSet.add(iv);
+			dependsOn.put(iv, selfSet);
 		}
+		for (TypeBound typeBound : bounds.flatten()) {
+			// "Given a bound of one of the following forms:" (ecj may represent some using :> rather than <:)
+			// α = T
+			// α <: T
+			// T = α  -- encoded as α = T
+			// T <: α -- encoded as α :> T
+			for (int i=0; i<2; i++) { // 2 attempts, reading the bound left-to-right, then right-to-left
+				if (maySkipSuperBound && typeBound.relation == ReductionResult.SUPERTYPE && typeBound.right instanceof InferenceVariable) {
+					// NON-JLS: first try to ignore any dependencies resulting from a supertype bound,
+					// i.e., given α :> β do not consider α to depend on β
+					hasSkippedSuperBound[0] = true; // signal the application of this tweak to upstream,
+													// so they can retry with the tweak disabled (maySkip=false)
+				} else {
+					Set<InferenceVariable> betas = new LinkedHashSet<>();
+					typeBound.right.collectInferenceVariables(betas);
+					if (!betas.isEmpty()) {
+						InferenceVariable alpha = typeBound.left;
+						// Determine the direction of dependencies to add:
+						// "If α appears on the left-hand side of another bound of the form G<..., α, ...> = capture(G<...>),
+						// then β depends on the resolution of α. Otherwise, α depends on the resolution of β."
+						boolean alphaDependsOnBeta = true;
+						captureTest: for (ParameterizedTypeBinding gCap : bounds.captures.keySet()) {
+							for (TypeBinding arg : gCap.arguments) {
+								if (TypeBinding.equalsEquals(arg, alpha)) {
+									alphaDependsOnBeta = false;
+									break captureTest;
+								}
+							}
+						}
+						if (alphaDependsOnBeta) {
+							Set<InferenceVariable> deps = dependsOn.computeIfAbsent(alpha, iv -> new LinkedHashSet<>());
+							deps.addAll(betas);
+							deps.add(alpha); // add self-dependency, alpha might not yet be recorded if its from inner inference
+						} else {
+							for (InferenceVariable beta : betas) {
+								Set<InferenceVariable> deps = dependsOn.computeIfAbsent(beta, iv -> new LinkedHashSet<>());
+								deps.add(alpha);
+								deps.add(beta); // add self-dependency, beta might not yet be recorded if its from inner inference
+							}
+						}
+					}
+				}
+				if (typeBound.right instanceof InferenceVariable ivRight) {
+					// if T is an ivar then repeat in inverse direction (right-to-left)
+					typeBound = new TypeBound(ivRight, typeBound.left, ReductionResult.inverse(typeBound.relation));
+				} else {
+					break;
+				}
+			}
+		}
+		// An inference variable α appearing on the left-hand side of a bound of the form G<..., α, ...> = capture(G<...>)
+		// depends on the resolution of every other inference variable mentioned in this bound (on both sides of the = sign).
+		for (Entry<ParameterizedTypeBinding, ParameterizedTypeBinding> capEntry : bounds.captures.entrySet()) {
+			Set<InferenceVariable> alphas = new LinkedHashSet<>();
+			for (TypeBinding arg : capEntry.getKey().arguments) {
+				if (arg instanceof InferenceVariable iv)
+					alphas.add(iv);
+			}
+			if (alphas.isEmpty()) continue;
+			Set<InferenceVariable> allIVs = new LinkedHashSet<>();
+	 		capEntry.getKey().collectInferenceVariables(allIVs);
+	 		capEntry.getValue().collectInferenceVariables(allIVs);
+			if (allIVs.size() < 2) continue; // if single alpha is the only ivar in allIVs
+			for (InferenceVariable alpha : alphas) {
+				Set<InferenceVariable> deps = dependsOn.computeIfAbsent(alpha, iv -> new LinkedHashSet<>());
+				deps.addAll(allIVs);
+			}
+		}
+		// "An inference variable α depends on the resolution of an inference variable β if there exists
+		//  an inference variable γ such that α depends on the resolution of γ and γ depends on the resolution of β. "
+		// compute the transitive closure by fix point computation:
+		boolean hasChange;
+		do {
+			hasChange = false;
+			for (Entry<InferenceVariable, Set<InferenceVariable>> deps : dependsOn.entrySet()) {
+				InferenceVariable alpha = deps.getKey();
+				Set<InferenceVariable> gammas = deps.getValue();
+				Set<InferenceVariable> gammasCopy = new HashSet<>(gammas); // stable while gammas may be modified
+				for (InferenceVariable gamma : gammasCopy) {
+					if (TypeBinding.equalsEquals(alpha, gamma)) continue;
+					Set<InferenceVariable> betas = dependsOn.get(gamma);
+					if (betas != null) {
+						// α depends on γ & γ depends on β => α depends on β
+						hasChange |= gammas.addAll(betas);
+					}
+				}
+			}
+		} while (hasChange);
+		return dependsOn;
 	}
 
-	private ConstraintFormula pickFromCycle(Set<ConstraintFormula> c) {
+	private ConstraintFormula pickFromCycle(Set<ConstraintFormula> c, Map<InferenceVariable, Set<InferenceVariable>> ivarDependencies) {
 		// Note on performance: this implementation could quite possibly be optimized a lot.
 		// However, we only *very rarely* reach here,
 		// so nobody should really be affected by the performance penalty paid here.
@@ -1416,7 +1601,7 @@ public class InferenceContext18 {
 			Collection<InferenceVariable> infVars = constraint.inputVariables(this);
 			for (ConstraintFormula other : c) {
 				if (other == constraint) continue;
-				if (dependsOn(infVars, other.outputVariables(this))) {
+				if (dependsOn(infVars, other.outputVariables(this), ivarDependencies)) {
 					// found a dependency, record it:
 					Set<ConstraintFormula> targetSet = dependencies.get(constraint);
 					if (targetSet == null)
@@ -1440,7 +1625,7 @@ public class InferenceContext18 {
 			Collection<InferenceVariable> infVars = candidate.inputVariables(this);
 			// does not depend on any constraints outside the cycle
 			for (ConstraintFormula out : outside) {
-				if (dependsOn(infVars, out.outputVariables(this)))
+				if (dependsOn(infVars, out.outputVariables(this), ivarDependencies))
 					continue candidates;
 			}
 			candidatesII.add(candidate);
@@ -1487,11 +1672,14 @@ public class InferenceContext18 {
 	 * Does the first constraint depend on the other?
 	 * The first constraint is represented by its input variables and the other constraint by its output variables.
 	 */
-	private boolean dependsOn(Collection<InferenceVariable> inputsOfFirst, Collection<InferenceVariable> outputsOfOther) {
+	private boolean dependsOn(Collection<InferenceVariable> inputsOfFirst, Collection<InferenceVariable> outputsOfOther,
+			Map<InferenceVariable, Set<InferenceVariable>> ivarDependencies) {
 		for (InferenceVariable iv : inputsOfFirst) {
-			for (InferenceVariable otherIV : outputsOfOther)
-				if (this.currentBounds.dependsOnResolutionOf(iv, otherIV))
-					return true;
+			Set<InferenceVariable> dependencies = ivarDependencies.get(iv);
+			if (dependencies != null)
+				for (InferenceVariable otherIV : outputsOfOther)
+					if (dependencies.contains(otherIV))
+						return true;
 		}
 		return false;
 	}
@@ -1570,7 +1758,7 @@ public class InferenceContext18 {
 	}
 
 	public SuspendedInferenceRecord enterPolyInvocation(InvocationSite invocation, Expression[] innerArguments) {
-		SuspendedInferenceRecord record = new SuspendedInferenceRecord(this.currentInvocation, this.invocationArguments, this.inferenceVariables, this.inferenceKind, this.usesUncheckedConversion);
+		SuspendedInferenceRecord record = new SuspendedInferenceRecord(this.currentInvocation, this.invocationArguments, this.inferenceVariables, this.inferenceKind, this.usesUncheckedConversion, this.currentBounds.captures);
 		this.inferenceVariables = null;
 		this.invocationArguments = innerArguments;
 		this.currentInvocation = invocation;
@@ -1579,7 +1767,7 @@ public class InferenceContext18 {
 	}
 
 	public SuspendedInferenceRecord enterLambda(LambdaExpression lambda) {
-		SuspendedInferenceRecord record = new SuspendedInferenceRecord(this.currentInvocation, this.invocationArguments, this.inferenceVariables, this.inferenceKind, this.usesUncheckedConversion);
+		SuspendedInferenceRecord record = new SuspendedInferenceRecord(this.currentInvocation, this.invocationArguments, this.inferenceVariables, this.inferenceKind, this.usesUncheckedConversion, null);
 		this.inferenceVariables = null;
 		this.invocationArguments = null;
 		this.usesUncheckedConversion = false;
@@ -1587,7 +1775,7 @@ public class InferenceContext18 {
 	}
 
 	public void integrateInnerInferenceB2(InferenceContext18 innerCtx) {
-		this.currentBounds.addBounds(innerCtx.b2, this.environment);
+		this.currentBounds.addBounds(innerCtx.b2, this.environment, true);
 		this.inferenceVariables = innerCtx.inferenceVariables;
 		this.inferenceKind = innerCtx.inferenceKind;
 		if (!isSameSite(innerCtx.currentInvocation, this.currentInvocation))
@@ -1618,6 +1806,8 @@ public class InferenceContext18 {
 		this.invocationArguments = record.invocationArguments;
 		this.inferenceKind = record.inferenceKind;
 		this.usesUncheckedConversion = record.usesUncheckedConversion;
+		if (record.captures != null)
+			this.currentBounds.captures = record.captures;
 	}
 
 	private boolean collectInnerContext(final InferenceContext18 innerContext) {

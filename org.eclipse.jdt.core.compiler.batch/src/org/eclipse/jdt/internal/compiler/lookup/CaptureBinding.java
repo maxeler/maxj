@@ -307,6 +307,9 @@ public class CaptureBinding extends TypeVariableBinding {
 		if(scope.environment().usesNullTypeAnnotations()) {
 			evaluateNullAnnotations(scope, null);
 		}
+		if (this.compatibleCache != null) {
+			this.compatibleCache.clear(); // any checks during initialization may have produced bogus results, get rid of them now
+		}
 	}
 
 	@Override

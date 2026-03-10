@@ -204,6 +204,7 @@ private static Class[] getAllTestClasses() {
 
 		// Get source tests
 		GetSourceTests.class,
+		GetDerivedSourceTests.class,
 
 		// Create packages tests
 		CreatePackageTests.class,
@@ -243,7 +244,7 @@ private static Class[] getAllTestClasses() {
 		JavaElement8Tests.class,
 
 		Java9ElementTests.class,
-		Java21ElementTests.class,
+		Java25ElementTests.class,
 
 		NullAnnotationModelTests9.class,
 

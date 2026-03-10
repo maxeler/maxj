@@ -755,7 +755,7 @@ private void internalAnalyseCode(FlowContext flowContext, FlowInfo flowInfo) {
 			for (int i=0; i<this.methods.length; i++) {
 				AbstractMethodDeclaration method = this.methods[i];
 				if (method.isConstructor()) {
-					FlowInfo ctorInfo = flowInfo.copy();
+					FlowInfo ctorInfo = flowInfo.unconditionalFieldLessCopy();
 					ConstructorDeclaration constructor = (ConstructorDeclaration) method;
 					constructor.analyseCode(this.scope, initializerContext, ctorInfo, ctorInfo.reachMode(), AnalysisMode.PROLOGUE);
 					ctorInfo = constructor.getPrologueInfo();
@@ -1181,9 +1181,7 @@ public StringBuilder printHeader(int indent, StringBuilder output) {
 		output.append('(');
 		for (int i = 0, length = this.recordComponents.length; i < length; i++) {
 			if (i > 0) output.append(", "); //$NON-NLS-1$
-			output.append(this.recordComponents[i].type.getTypeName()[0]);
-			output.append(' ');
-			output.append(this.recordComponents[i].name);
+			this.recordComponents[i].print(indent, output);
 		}
 		output.append(')');
 	}
@@ -1908,15 +1906,6 @@ public void updateSupertypesWithAnnotations(Map<ReferenceBinding,ReferenceBindin
 protected ReferenceBinding updateWithAnnotations(TypeReference typeRef, ReferenceBinding previousType,
 		Map<ReferenceBinding, ReferenceBinding> outerUpdates, Map<ReferenceBinding, ReferenceBinding> updates)
 {
-	if (!TESTING_GH_2158
-			&& previousType instanceof ParameterizedTypeBinding previousPTB
-			&& previousPTB.original() instanceof SourceTypeBinding previousOriginal
-			&& previousOriginal.supertypeAnnotationsUpdated) {
-		// re-initialized parameterized type with updated annotations from the original:
-		typeRef.resolvedType = this.scope.environment().createParameterizedType(previousOriginal,		// <- has been updated
-				previousPTB.arguments, previousType.enclosingType(), previousType.getAnnotations());	// <- no changes here
-	}
-
 	typeRef.updateWithAnnotations(this.scope, 0);
 	ReferenceBinding updatedType = (ReferenceBinding) typeRef.resolvedType;
 	if (updatedType instanceof ParameterizedTypeBinding) {
@@ -1930,10 +1919,8 @@ protected ReferenceBinding updateWithAnnotations(TypeReference typeRef, Referenc
 	if (previousType != null) {
 		if (previousType.id == TypeIds.T_JavaLangObject && ((this.binding.tagBits & TagBits.HierarchyHasProblems) != 0))
 			return previousType; // keep this cycle breaker
-		if (previousType != updatedType) { //$IDENTITY-COMPARISON$
+		if (previousType != updatedType) //$IDENTITY-COMPARISON$
 			updates.put(previousType, updatedType);
-			this.binding.supertypeAnnotationsUpdated = true;
-		}
 	}
 	return updatedType;
 }

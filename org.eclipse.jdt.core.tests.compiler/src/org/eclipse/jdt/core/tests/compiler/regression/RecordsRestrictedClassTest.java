@@ -11688,4 +11688,177 @@ public void testIssue4622() throws Exception {
 					"      )";
 	verifyClassFile(expectedOutput, "test/Record.class", ClassFileBytesDisassembler.SYSTEM);
 }
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4749
+// ECJ erroneously allows a local record class to access its outer local variable and crashes while generating code
+public void testIssue4749() throws Exception {
+	this.runNegativeTest(
+		new String[] {
+					"Y.java",
+					"""
+					import java.util.Objects;
+
+					public class Y
+					{
+
+					  String [] args = { "Hello" };
+
+					  record Point(int x, int y) //no extends - like enum, because it already extends java.lang.Record
+					  {
+					    Point { //optional & "compact" variant
+					      if (x<0 || y<0)
+					        throw new IllegalArgumentException();
+					    }
+					  }
+
+					  record DoublePoint(Point p1, Point p2) {
+					      DoublePoint {
+					      if (args == null)
+					          throw new Error("...");
+					        if (args.length > 0)
+					          throw new Error("...");
+					      }
+					    }
+
+					  public static void main(String[] args)
+					  {
+					    Point p1 = new Point(1, 2);
+					    System.out.print(p1); //Point[x=1, y=2]
+
+					    int xy = p1.x() + p1.y();
+
+					    //p1.x = 1; //Error The final field Records.Point.x cannot be assigned
+
+					    Point p2 = new Point(1, 2);
+					    System.out.println(p1 == p2); //false
+					    System.out.println(Objects.equals(p1, p2)); //true
+					    System.out.println(p1.hashCode() == p2.hashCode()); // true;
+
+
+
+					    DoublePoint dp = new DoublePoint(p1, p2);
+					    System.out.println(dp);
+					  }
+					}
+					""",
+					"X.java",
+					"""
+					import java.util.Objects;
+
+					public class X
+					{
+					  record Point(int x, int y) //no extends - like enum, because it already extends java.lang.Record
+					  {
+					    Point { //optional & "compact" variant
+					      if (x<0 || y<0)
+					        throw new IllegalArgumentException();
+					    }
+					  }
+
+					  public static void main(String[] args)
+					  {
+					    Point p1 = new Point(1, 2);
+					    System.out.print(p1); //Point[x=1, y=2]
+
+					    int xy = p1.x() + p1.y();
+
+					    //p1.x = 1; //Error The final field Records.Point.x cannot be assigned
+
+					    Point p2 = new Point(1, 2);
+					    System.out.println(p1 == p2); //false
+					    System.out.println(Objects.equals(p1, p2)); //true
+					    System.out.println(p1.hashCode() == p2.hashCode()); // true;
+
+					    record DoublePoint(Point p1, Point p2) {
+					      DoublePoint {
+					        if (args == null)
+					          throw new Error("...");
+					        if (args.length > 0)
+					          throw new Error("...");
+					      }
+					    }
+
+					    DoublePoint dp = new DoublePoint(p1, p2);
+					    System.out.println(dp);
+					  }
+					}
+					""",
+	            },
+				"----------\n" +
+				"1. ERROR in Y.java (at line 18)\n" +
+				"	if (args == null)\n" +
+				"	    ^^^^\n" +
+				"Cannot make a static reference to the non-static field args\n" +
+				"----------\n" +
+				"2. ERROR in Y.java (at line 20)\n" +
+				"	if (args.length > 0)\n" +
+				"	    ^^^^^^^^^^^\n" +
+				"Cannot make a static reference to the non-static field args\n" +
+				"----------\n" +
+				"----------\n" +
+				"1. ERROR in X.java (at line 29)\n" +
+				"	if (args == null)\n" +
+				"	    ^^^^\n" +
+				"Cannot make a static reference to the non-static variable args\n" +
+				"----------\n" +
+				"2. ERROR in X.java (at line 31)\n" +
+				"	if (args.length > 0)\n" +
+				"	    ^^^^^^^^^^^\n" +
+				"Cannot make a static reference to the non-static variable args\n" +
+				"----------\n");
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4835
+// Constant referenced in annotation is not recognized as a constant value
+public void testIssue4835() throws Exception {
+	this.runConformTest(
+		new String[] {
+					"testing/X.java",
+					"""
+					package testing;
+
+					import testing.X.JsonProperties;
+
+					import java.lang.annotation.ElementType;
+					import java.lang.annotation.Retention;
+					import java.lang.annotation.RetentionPolicy;
+					import java.lang.annotation.Target;
+
+					@Target({ElementType.ANNOTATION_TYPE, ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER})
+					@Retention(RetentionPolicy.RUNTIME)
+
+					@interface JsonProperty {
+						String value();
+					}
+
+					@Target({ElementType.ANNOTATION_TYPE, ElementType.TYPE,
+					    ElementType.METHOD, ElementType.CONSTRUCTOR, ElementType.FIELD})
+					@Retention(RetentionPolicy.RUNTIME)
+
+					@interface JsonPropertyOrder {
+					    public String[] value() default { };
+					}
+
+
+					@JsonPropertyOrder({
+						JsonProperties.CONSTANT_ONE,
+						JsonProperties.CONSTANT_TWO,
+					})
+					public record X(
+					    @JsonProperty(JsonProperties.CONSTANT_ONE) String attributeOne, // Error in this line
+					    @JsonProperty(JsonProperties.CONSTANT_TWO) String attributeTwo) {
+
+						class JsonProperties {
+
+							public static final String CONSTANT_ONE = "one";
+
+							public static final String CONSTANT_TWO = "two";
+						}
+
+						public static void main(String [] args) {
+                            System.out.println("OK!");
+                        }
+					}
+					""",
+	            },
+		"OK!");
+}
 }

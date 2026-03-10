@@ -8261,7 +8261,6 @@ public void testBug459967_Array_clone_b() {
 		"----------\n");
 }
 public void testBug448709_allocationExpression1() {
-	// inference prioritizes constraint (<@Nullable T>) over expected type (@NonNull String), hence a null type mismatch results
 	runNegativeTestWithLibs(
 		new String[] {
 			"X.java",
@@ -8278,10 +8277,10 @@ public void testBug448709_allocationExpression1() {
 		},
 		getCompilerOptions(),
 		"----------\n" +
-		"1. ERROR in X.java (at line 8)\n" +
+		"1. WARNING in X.java (at line 8)\n" +
 		"	return zork(new FI<>());\n" +
-		"	            ^^^^^^^^^^\n" +
-		"Null type mismatch (type annotations): required \'F0<@NonNull String>\' but this expression has type \'@NonNull FI<@Nullable String>\', corresponding supertype is \'F0<@Nullable String>\'\n" +
+		"	       ^^^^^^^^^^^^^^^^\n" +
+		"Null type safety (type annotations): The expression of type \'String\' needs unchecked conversion to conform to \'@NonNull String\'\n" +
 		"----------\n");
 }
 public void testBug448709_allocationExpression2() {
@@ -10251,7 +10250,7 @@ public void testBug484741Invoke() {
 			"test/TestInterdepInvoke.java",
 			"package test;\n" +
 			"\n" +
-			"import org.eclipse.jdt.annotation.Nullable;\n" +
+			"import org.eclipse.jdt.annotation.*;\n" +
 			"\n" +
 			"public class TestInterdepInvoke {\n" +
 			"	static <T, E extends T> T f1(E e) {\n" +
@@ -10291,6 +10290,9 @@ public void testBug484741Invoke() {
 			"	// -------- invocations of f2 --------\n" +
 			"\n" +
 			"	static <T21, E21 extends T21> T21 g21(E21 e) {\n" +
+			"		return f2(e);\n" +
+			"	}\n" +
+			"	static <T21, @NonNull E21 extends T21> T21 g21a(E21 e) { // override hind from f2.<E>\n" +
 			"		return f2(e);\n" +
 			"	}\n" +
 			"\n" +
@@ -10355,22 +10357,32 @@ public void testBug484741Invoke() {
 		"	       ^^^^^\n" +
 		"Null type mismatch (type annotations): required \'T12\' but this expression has type \'@Nullable E12 extends T12\', where \'T12\' is a free type variable\n" +
 		"----------\n" +
-		"3. ERROR in test\\TestInterdepInvoke.java (at line 61)\n" +
+		"3. ERROR in test\\TestInterdepInvoke.java (at line 43)\n" +
+		"	return f2(e);\n" +
+		"	       ^^^^^\n" +
+		"Null type mismatch (type annotations): required \'T21\' but this expression has type \'@Nullable E21 extends T21\', where \'T21\' is a free type variable\n" +
+		"----------\n" +
+		"4. ERROR in test\\TestInterdepInvoke.java (at line 50)\n" +
+		"	return f2(e);\n" +
+		"	       ^^^^^\n" +
+		"Null type mismatch (type annotations): required \'T22\' but this expression has type \'@Nullable E22 extends T22\', where \'T22\' is a free type variable\n" +
+		"----------\n" +
+		"5. ERROR in test\\TestInterdepInvoke.java (at line 64)\n" +
 		"	return f3(e); // error 3 expected\n" +
 		"	       ^^^^^\n" +
 		"Null type mismatch (type annotations): required \'T31\' but this expression has type \'@Nullable E31 extends T31\', where \'T31\' is a free type variable\n" +
 		"----------\n" +
-		"4. ERROR in test\\TestInterdepInvoke.java (at line 65)\n" +
+		"6. ERROR in test\\TestInterdepInvoke.java (at line 68)\n" +
 		"	return f3(e); // error 4 expected\n" +
 		"	       ^^^^^\n" +
 		"Null type mismatch (type annotations): required \'T32\' but this expression has type \'@Nullable E32 extends T32\', where \'T32\' is a free type variable\n" +
 		"----------\n" +
-		"5. ERROR in test\\TestInterdepInvoke.java (at line 79)\n" +
+		"7. ERROR in test\\TestInterdepInvoke.java (at line 82)\n" +
 		"	return f4(e); /// error 5 expected\n" +
 		"	       ^^^^^\n" +
 		"Null type mismatch (type annotations): required \'T41\' but this expression has type \'@Nullable E41 extends T41\', where \'T41\' is a free type variable\n" +
 		"----------\n" +
-		"6. ERROR in test\\TestInterdepInvoke.java (at line 83)\n" +
+		"6. ERROR in test\\TestInterdepInvoke.java (at line 86)\n" +
 		"	return f4(e); // error 6 expected\n" +
 		"	       ^^^^^\n" +
 		"Null type mismatch (type annotations): required \'T42\' but this expression has type \'@Nullable E42 extends T42\', where \'T42\' is a free type variable\n" +
@@ -14219,7 +14231,7 @@ public void testBug501564() {
 		new String[] {
 			"xxx/Foo.java",
 			"package xxx;\n" +
-			"import org.eclipse.jdt.annotation.NonNullByDefault;\n" +
+			"import org.eclipse.jdt.annotation.*;\n" +
 			"import org.eclipse.jdt.annotation.DefaultLocation;\n" +
 			"\n" +
 			"class Generic<E1 extends Generic<E1>> { \n" +
@@ -14228,33 +14240,10 @@ public void testBug501564() {
 			"    static <E2 extends Generic<E2>> Bar<E2> foo() {\n" +
 			"        return new Bar<>();\n" +
 			"    }\n" +
-			"\n" +
-			"    @NonNullByDefault(DefaultLocation.TYPE_PARAMETER)\n" +
-			"    static class Bar<E3 extends Generic<E3>> { }\n" +
-			"}\n" +
-			"",
-		},
-		getCompilerOptions(),
-		"----------\n" +
-		"1. ERROR in xxx\\Foo.java (at line 8)\n" +
-		"	static <E2 extends Generic<E2>> Bar<E2> foo() {\n" +
-		"	                                    ^^\n" +
-		"Null constraint mismatch: The type \'E2 extends Generic<E2>\' is not a valid substitute for the type parameter \'@NonNull E3 extends Generic<E3 extends Generic<E3>>\'\n" +
-		"----------\n"
-	);
-}
-public void testBug501564interface() {
-	runNegativeTestWithLibs(
-		new String[] {
-			"xxx/Foo.java",
-			"package xxx;\n" +
-			"import org.eclipse.jdt.annotation.NonNullByDefault;\n" +
-			"import org.eclipse.jdt.annotation.DefaultLocation;\n" +
-			"\n" +
-			"interface Generic<E1 extends Generic<E1>> { \n" +
-			"}\n" +
-			"class Foo { \n" +
-			"    static <E2 extends Generic<E2>> Bar<E2> foo() {\n" +
+			"    static <E2 extends Generic<E2>> Bar<E2> foo2() {\n" +
+			"        return new Bar<@NonNull E2>();\n" +
+			"    }\n" +
+			"    static <@NonNull E2 extends Generic<E2>> Bar<E2> foo3() {\n" +
 			"        return new Bar<>();\n" +
 			"    }\n" +
 			"\n" +
@@ -14268,7 +14257,62 @@ public void testBug501564interface() {
 		"1. ERROR in xxx\\Foo.java (at line 8)\n" +
 		"	static <E2 extends Generic<E2>> Bar<E2> foo() {\n" +
 		"	                                    ^^\n" +
-		"Null constraint mismatch: The type \'E2 extends Generic<E2>\' is not a valid substitute for the type parameter \'@NonNull E3 extends Generic<E3 extends Generic<E3>>\'\n" +
+		"Null constraint mismatch: The type \'E2 extends Generic<E2>\' is not a valid substitute for the type parameter \'@NonNull E3 extends Generic<@NonNull E3>\'\n" +
+		"----------\n" +
+		"2. ERROR in xxx\\Foo.java (at line 9)\n" +
+		"	return new Bar<>();\n" +
+		"	       ^^^^^^^^^^^\n" +
+		"Null constraint mismatch: The type \'E2 extends Generic<E2>\' is not a valid substitute for the type parameter \'E3\' extends Generic<@NonNull E3\' extends Generic<@NonNull E3\'>>\'\n" +
+		"----------\n" +
+		"3. ERROR in xxx\\Foo.java (at line 11)\n" +
+		"	static <E2 extends Generic<E2>> Bar<E2> foo2() {\n" +
+		"	                                    ^^\n" +
+		"Null constraint mismatch: The type \'E2 extends Generic<E2>\' is not a valid substitute for the type parameter \'@NonNull E3 extends Generic<@NonNull E3>\'\n" +
+		"----------\n"
+	);
+}
+public void testBug501564interface() {
+	runNegativeTestWithLibs(
+		new String[] {
+			"xxx/Foo.java",
+			"package xxx;\n" +
+			"import org.eclipse.jdt.annotation.*;\n" +
+			"import org.eclipse.jdt.annotation.DefaultLocation;\n" +
+			"\n" +
+			"interface Generic<E1 extends Generic<E1>> { \n" +
+			"}\n" +
+			"class Foo { \n" +
+			"    static <E2 extends Generic<E2>> Bar<E2> foo() {\n" +
+			"        return new Bar<>();\n" +
+			"    }\n" +
+			"    static <E2 extends Generic<E2>> Bar<E2> foo2() {\n" +
+			"        return new Bar<@NonNull E2>();\n" +
+			"    }\n" +
+			"    static <@NonNull E2 extends Generic<E2>> Bar<E2> foo3() {\n" +
+			"        return new Bar<>();\n" +
+			"    }\n" +
+			"\n" +
+			"    @NonNullByDefault(DefaultLocation.TYPE_PARAMETER)\n" +
+			"    static class Bar<E3 extends Generic<E3>> { }\n" +
+			"}\n" +
+			"",
+		},
+		getCompilerOptions(),
+		"----------\n" +
+		"1. ERROR in xxx\\Foo.java (at line 8)\n" +
+		"	static <E2 extends Generic<E2>> Bar<E2> foo() {\n" +
+		"	                                    ^^\n" +
+		"Null constraint mismatch: The type \'E2 extends Generic<E2>\' is not a valid substitute for the type parameter \'@NonNull E3 extends Generic<@NonNull E3>\'\n" +
+		"----------\n" +
+		"2. ERROR in xxx\\Foo.java (at line 9)\n" +
+		"	return new Bar<>();\n" +
+		"	       ^^^^^^^^^^^\n" +
+		"Null constraint mismatch: The type \'E2 extends Generic<E2>\' is not a valid substitute for the type parameter \'E3\' extends Generic<@NonNull E3\' extends Generic<@NonNull E3\'>>\'\n" +
+		"----------\n" +
+		"3. ERROR in xxx\\Foo.java (at line 11)\n" +
+		"	static <E2 extends Generic<E2>> Bar<E2> foo2() {\n" +
+		"	                                    ^^\n" +
+		"Null constraint mismatch: The type \'E2 extends Generic<E2>\' is not a valid substitute for the type parameter \'@NonNull E3 extends Generic<@NonNull E3>\'\n" +
 		"----------\n"
 	);
 }
@@ -19628,5 +19672,212 @@ public void testGH4011() {
 			----------
 			""";
 	runner.runNegativeTest();
+}
+public void testGH4668a() throws Exception {
+	Runner runner = new Runner();
+	runner.customOptions = getCompilerOptions();
+	runner.customOptions.put(JavaCore.COMPILER_ANNOTATION_NULL_ANALYSIS, JavaCore.ENABLED);
+	runner.customOptions.put(JavaCore.COMPILER_NONNULL_ANNOTATION_NAME, "VEB.NonNull");
+	runner.customOptions.put(JavaCore.COMPILER_NULLABLE_ANNOTATION_NAME, "VEB.Nullable");
+	runner.customOptions.put(JavaCore.COMPILER_NONNULL_BY_DEFAULT_ANNOTATION_NAME, "VEB.NonNullByDefault");
+	runner.testFiles = new String[] {
+			"VEB/NonNullByDefault.java", """
+			package VEB;
+			import static java.lang.annotation.RetentionPolicy.RUNTIME;
+			import java.lang.annotation.Documented;
+			import java.lang.annotation.Retention;
+
+			@Documented
+			@Retention(RUNTIME)
+			public @interface NonNullByDefault { }
+			class X extends Zork {}
+			""",
+			"VEB/NonNull.java",
+			"""
+			package VEB;
+			import static java.lang.annotation.RetentionPolicy.RUNTIME;
+			import java.lang.annotation.Documented;
+			import java.lang.annotation.Retention;
+
+			@Documented
+			@Retention(RUNTIME)
+			public @interface NonNull { }
+			""",
+			"VEB/Nullable.java", """
+			package VEB;
+			import static java.lang.annotation.RetentionPolicy.RUNTIME;
+			import java.lang.annotation.Documented;
+			import java.lang.annotation.Retention;
+
+			@Documented
+			@Retention(RUNTIME)
+			public @interface Nullable { }
+			""",
+			"VEB/package-info.java", """
+			@NonNullByDefault
+			package VEB;
+			"""
+	};
+	runner.expectedCompilerLog =
+			"""
+			----------
+			1. ERROR in VEB\\NonNullByDefault.java (at line 9)
+				class X extends Zork {}
+				                ^^^^
+			Zork cannot be resolved to a type
+			----------
+			----------
+			1. WARNING in VEB\\package-info.java (at line 1)
+				@NonNullByDefault
+				^
+			Cannot fully evaluate null annotations due to cyclic structure involving VEB.NonNullByDefault
+			----------
+			""";
+	runner.runNegativeTest();
+}
+public void testGH4717_OR() {
+	Runner runner = new Runner();
+	runner.customOptions = getCompilerOptions();
+	runner.customOptions.put(CompilerOptions.OPTION_SyntacticNullAnalysisForFields, CompilerOptions.ENABLED);
+	runner.classLibraries = this.LIBS;
+	runner.testFiles = new String[] {
+		"CheckingNullableField.java",
+		"""
+		import org.eclipse.jdt.annotation.NonNull;
+		import org.eclipse.jdt.annotation.Nullable;
+
+		public class CheckingNullableField {
+
+			// Change request ID - null if change not checked
+			protected @Nullable String changeRequestID;
+
+			public CheckingNullableField(@Nullable String aChangeRequestID) {
+				changeRequestID = aChangeRequestID;
+			}
+
+			public boolean verifyRequest1a(@NonNull String aRequestID) {
+				if ( (changeRequestID == null) || (changeRequestID.isEmpty()) ) {
+					changeRequestID.isEmpty(); // check is expired here
+					return true;
+				}
+				return aRequestID.equalsIgnoreCase(changeRequestID);
+			}
+
+			public boolean verifyRequest1b(@NonNull String aRequestID) {
+				if (!((changeRequestID == null) || changeRequestID.isEmpty())) {
+					return false;
+				}
+				return aRequestID.equalsIgnoreCase(changeRequestID);
+			}
+		}
+		"""
+	};
+	runner.expectedCompilerLog =
+			"""
+			----------
+			1. ERROR in CheckingNullableField.java (at line 15)
+				changeRequestID.isEmpty(); // check is expired here
+				^^^^^^^^^^^^^^^
+			Potential null pointer access: this expression has a '@Nullable' type
+			----------
+			""";
+	runner.runNegativeTest();
+}
+public void testGH4717_nullExit() {
+	Runner runner = new Runner();
+	runner.customOptions = getCompilerOptions();
+	runner.customOptions.put(CompilerOptions.OPTION_SyntacticNullAnalysisForFields, CompilerOptions.ENABLED);
+	runner.customOptions.put(CompilerOptions.OPTION_ReportUnnecessaryElse, CompilerOptions.IGNORE);
+	runner.classLibraries = this.LIBS;
+	runner.testFiles = new String[] {
+		"CheckingNullableField.java",
+		"""
+		import org.eclipse.jdt.annotation.NonNull;
+		import org.eclipse.jdt.annotation.Nullable;
+
+		public class CheckingNullableField {
+
+			// Change request ID - null if change not checked
+			protected @Nullable String changeRequestID;
+
+			public CheckingNullableField(@Nullable String aChangeRequestID) {
+				changeRequestID = aChangeRequestID;
+			}
+
+			public boolean verifyRequest2a(@NonNull String aRequestID) {
+				if (changeRequestID == null) {
+					return true;
+				}
+				if (changeRequestID.isEmpty()) {
+					return true;
+				}
+				return aRequestID.equalsIgnoreCase(changeRequestID);
+			}
+			public boolean verifyRequest2b(@NonNull String aRequestID) {
+				if (changeRequestID == null) {
+					return true;
+				}
+				expire();
+				if (changeRequestID.isEmpty()) { // check is expired here
+					return true;
+				}
+				return aRequestID.equalsIgnoreCase(changeRequestID);
+			}
+			public boolean verifyRequest2c(@NonNull String aRequestID) {
+				if (changeRequestID == null) {
+					return true;
+				} else {
+					if (changeRequestID.isEmpty()) {
+						return true;
+					}
+				}
+				if (changeRequestID.isEmpty()) { // check is expired here
+					return true;
+				}
+				return aRequestID.equalsIgnoreCase(changeRequestID);
+			}
+			void expire() {}
+		}
+		"""
+	};
+	runner.expectedCompilerLog =
+			"""
+			----------
+			1. ERROR in CheckingNullableField.java (at line 27)
+				if (changeRequestID.isEmpty()) { // check is expired here
+				    ^^^^^^^^^^^^^^^
+			Potential null pointer access: this expression has a '@Nullable' type
+			----------
+			2. ERROR in CheckingNullableField.java (at line 40)
+				if (changeRequestID.isEmpty()) { // check is expired here
+				    ^^^^^^^^^^^^^^^
+			Potential null pointer access: this expression has a '@Nullable' type
+			----------
+			""";
+	runner.runNegativeTest();
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4494
+// Trouble annotating explicit receiver with ECJ (works fine with javac)
+public void testGH4494() throws Exception {
+	runConformTest(new String[] {
+			"AnnotatedExplicitReceiverError.java",
+			"""
+			import java.lang.annotation.ElementType;
+			import java.lang.annotation.Target;
+
+			public class AnnotatedExplicitReceiverError {
+			    @Target({ ElementType.TYPE_USE})
+			    private static @interface A { }
+
+			    @Target({ ElementType.TYPE_USE, ElementType.TYPE_PARAMETER })
+			    private static @interface F { }
+
+			    static class P<@A T> {
+			        public void explicitReceiver(@F P<T> this) { // error here
+			        }
+			    }
+			}
+			"""
+	});
 }
 }
