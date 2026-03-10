@@ -2189,7 +2189,7 @@ public class DefaultCodeFormatterConstants {
 	 * </pre>
 	 * @see #TRUE
 	 * @see #FALSE
-	 * @since 3.43
+	 * @since 3.45
 	 */
 	public static final String FORMATTER_INDENT_SWITCH_STATEMENTS_COMPARE_TO_SWITCH = JavaCore.PLUGIN_ID + ".formatter.indent_SWITCHstatements_compare_to_SWITCH";	//$NON-NLS-1$
 	/**
