@@ -368,14 +368,11 @@ public TypeBinding resolveType(BlockScope scope, Assignment assignment) {
 		return this.resolvedType;
 	}
 
-	if (this.receiver == null || this.receiver.resolvedType == null
-			|| this.position == null || this.position.resolvedType == null
-			|| assignment.expression == null || assignment.expression.resolvedType == null) {
-		return null;
-	}
-	if(!this.receiver.resolvedType.isArrayType()){
-		scope.problemReporter().invalidOrMissingOverloadedOperator(this, getMethodName(true),
-				this.position.resolvedType, assignment.expression.resolvedType);
+	if (this.receiver.resolvedType == null || !this.receiver.resolvedType.isArrayType()) {
+		if (this.attemptedToResolveArguments) {
+			scope.problemReporter().invalidOrMissingOverloadedOperator(this, getMethodName(true),
+					this.position.resolvedType, assignment.expression.resolvedType);
+		}
 		return null;
 	}
 
