@@ -41,12 +41,6 @@ public class UnaryExpression extends OperatorExpression {
 	private int trueInitStateIndex = -1;
 	public MethodBinding appropriateMethodForOverload = null;
 	public MethodBinding syntheticAccessor = null;
-	public TypeBinding expectedType = null;//Operator overload, for generic function call
-
-	@Override
-	public void setExpectedType(TypeBinding expectedType) {
-		this.expectedType = expectedType;
-	}
 
 	public UnaryExpression(Expression expression, int operator) {
 		this.expression = expression;
@@ -69,19 +63,12 @@ public class UnaryExpression extends OperatorExpression {
 	}
 
 	public MethodBinding getMethodBindingForOverload(BlockScope scope) {
-		TypeBinding tb = null;
-
-		if(this.expression.resolvedType == null)
-			tb = this.expression.resolveType(scope);
-		else
-			tb = this.expression.resolvedType;
-
-		final TypeBinding targetType = tb;
+		final TypeBinding tb = this.expression.resolvedType;
 
 		OperatorOverloadInvocationSite fakeInvocationSite = new OperatorOverloadInvocationSite(){
 			@Override
 			public TypeBinding invocationTargetType() {
-				return targetType;
+				return tb;
 			}
 			@Override
 			public Expression[] arguments() {

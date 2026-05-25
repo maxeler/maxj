@@ -39,12 +39,6 @@ public class CompoundAssignment extends Assignment implements OperatorIds {
 	public int preAssignImplicitConversion;
 	public MethodBinding appropriateMethodForOverload = null;
 	public MethodBinding syntheticAccessor = null;
-	public TypeBinding expectedType = null;//Operator overload, for generic function call
-
-	@Override
-	public void setExpectedType(TypeBinding expectedType) {
-		this.expectedType = expectedType;
-	}
 
 	//  var op exp is equivalent to var = (varType) var op exp
 	// assignmentImplicitConversion stores the cast needed for the assignment
@@ -268,9 +262,10 @@ public String getBindingMethodName() {
 						}
 					}
 				}
-			}
-			else
+			} else {
+				scope.problemReporter().invalidOrMissingOverloadedOperator(this, getBindingMethodName(), originalExpressionType);
 				return null;
+			}
 		}
 		if(originalLhsType.id != T_JavaLangString){
 			if ((!originalExpressionType.isBaseType() && !originalExpressionType.isBoxedPrimitiveType() && originalExpressionType.id != T_JavaLangString)

@@ -1087,7 +1087,7 @@ public TypeBinding resolveType(BlockScope scope) {
 	return null;
 }
 
-public TypeBinding resolveType(BlockScope scope, Expression expression) {
+public TypeBinding resolveType(BlockScope scope, Assignment expression) {
 	return resolveType(scope);
 }
 

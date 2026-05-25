@@ -22,18 +22,8 @@ public class EqualEqualExpression extends BinaryExpression{
 
 	@Override
 	public MethodBinding getMethodBindingForOverload(BlockScope scope) {
-		TypeBinding tb_right = null;
-		TypeBinding tb_left = null;
-
-		if(this.left.resolvedType == null)
-			tb_left = this.left.resolveType(scope);
-		else
-			tb_left = this.left.resolvedType;
-
-		if(this.right.resolvedType == null)
-			tb_right = this.right.resolveType(scope);
-		else
-			tb_right = this.right.resolvedType;
+		TypeBinding tb_right = this.right.resolvedType;
+		TypeBinding tb_left = this.left.resolvedType;
 
 		String ms = ""; //$NON-NLS-1$
 		String rms = ""; //$NON-NLS-1$

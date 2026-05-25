@@ -224,24 +224,23 @@ public TypeBinding resolveType(BlockScope scope) {
 	}
 	TypeBinding lhsType = this.lhs.resolveType(scope, this);
 	this.expression.setExpressionContext(ASSIGNMENT_CONTEXT);
-	if (this.lhs instanceof ArrayReference || this.lhs instanceof CompositeArrayReference) {
-		if (this.lhs instanceof ArrayReference) {
-			ArrayReference array = (ArrayReference) this.lhs;
-			if (array.appropriateMethodForOverload != null) {
-				//Put method will be called
-				//Return type must be void
-				this.resolvedType = this.lhs.resolvedType;
-				return this.lhs.resolvedType;
-			}
-		} else {
-			CompositeArrayReference array = (CompositeArrayReference) this.lhs;
-			if (array.appropriateMethodForOverload != null) {
-				//Put method will be called
-				//Return type must be void
-				this.resolvedType = this.lhs.resolvedType;
-				return this.lhs.resolvedType;
-			}
+	boolean alreadyResolvedExpression = false;
+	if (this.lhs instanceof ArrayReference array) {
+		if (array.appropriateMethodForOverload != null) {
+			//Put method will be called
+			//Return type must be void
+			this.resolvedType = this.lhs.resolvedType;
+			return this.lhs.resolvedType;
 		}
+		alreadyResolvedExpression = array.attemptedToResolveArguments;
+	} else if (this.lhs instanceof CompositeArrayReference array) {
+		if (array.appropriateMethodForOverload != null) {
+			//Put method will be called
+			//Return type must be void
+			this.resolvedType = this.lhs.resolvedType;
+			return this.lhs.resolvedType;
+		}
+		alreadyResolvedExpression = array.attemptedToResolveArguments;
 	}
 	this.expression.setExpectedType(lhsType); // needed in case of generic method invocation
 	if (lhsType != null) {
@@ -251,11 +250,8 @@ public TypeBinding resolveType(BlockScope scope) {
 	if (localVariableBinding != null && (localVariableBinding.isCatchParameter() || localVariableBinding.isParameter())) {
 		localVariableBinding.clearEffectiveFinality(scope, this.lhs, true);  // as it is already definitely assigned, we can conclude already. Also note: catch parameter cannot be compound assigned.
 	}
-	TypeBinding rhsType;
-	if(this.expression.resolvedType != null)
-		rhsType = this.expression.resolvedType;
-	else
-		rhsType = this.expression.resolveType(scope);
+	TypeBinding rhsType = alreadyResolvedExpression ? this.expression.resolvedType
+			: this.expression.resolveType(scope);
 	if (lhsType == null || rhsType == null) {
 		return null;
 	}

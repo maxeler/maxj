@@ -40,14 +40,10 @@ public class ArrayReference extends Reference {
 	public Expression position;
 	public MethodBinding appropriateMethodForOverload = null;
 	public MethodBinding compoundAppropriateMethodForOverload = null;
-	public TypeBinding expectedType = null; //Operator overload, for generic function call
 	public MethodBinding syntheticAccessor;
 	public MethodBinding syntheticCompundAccessor;
-
-	@Override
-	public void setExpectedType(TypeBinding expectedType) {
-		this.expectedType = expectedType;
-	}
+	public boolean attemptedToResolveReceiver = false;
+	public boolean attemptedToResolveArguments = false;
 
 public ArrayReference(Expression rec, Expression pos) {
 	this.receiver = rec;
@@ -286,15 +282,12 @@ public TypeBinding resolveType(BlockScope scope) {
 		if (isMethodUseDeprecated(this.appropriateMethodForOverload, scope, true, new InvocationSite.EmptyWithAstNode(this)))
 			scope.problemReporter().deprecatedMethod(this.appropriateMethodForOverload, this);
 		this.resolvedType = overloadMethod.returnType;
-		if(this.position.resolvedType == null)
-			this.position.resolveType(scope);
 		this.receiver.computeConversion(scope, this.receiver.resolvedType, this.receiver.resolvedType);
 		this.position.computeConversion(scope, overloadMethod.parameters[0], this.position.resolvedType);
-		this.setExpectedType(this.resolvedType);
 		return overloadMethod.returnType;
 	}
 
-	TypeBinding arrayType = this.receiver.resolvedType; //Type(scope);
+	TypeBinding arrayType = this.receiver.resolvedType;
 
 	if (arrayType != null) {
 		this.receiver.computeConversion(scope, arrayType, arrayType);
@@ -305,10 +298,19 @@ public TypeBinding resolveType(BlockScope scope) {
 			scope.problemReporter().referenceMustBeArrayTypeAt(arrayType, this);
 		}
 	}
-	TypeBinding positionType = this.position.resolvedType == null ?
-			this.position.resolveTypeExpecting(scope, TypeBinding.INT) : this.position.resolvedType;
+	TypeBinding positionType = this.attemptedToResolveArguments ? this.position.resolvedType :
+			this.position.resolveType(scope);
 	if (positionType != null) {
-		this.position.computeConversion(scope, TypeBinding.INT, positionType);
+		if (!positionType.isCompatibleWith(TypeBinding.INT)) {
+			if (scope.isBoxingCompatibleWith(positionType, TypeBinding.INT)) {
+				this.position.computeConversion(scope, TypeBinding.INT, positionType);
+			} else {
+				scope.problemReporter().typeMismatchError(positionType, TypeBinding.INT, this.position, null);
+				return null;
+			}
+		}
+	} else {
+		this.resolvedType = null;
 	}
 	return this.resolvedType;
 }
@@ -352,25 +354,10 @@ public void generatePostOverloadAssignment(BlockScope currentScope, CodeStream c
 }
 
 @Override
-public TypeBinding resolveType(BlockScope scope, Expression expression) {
-	//Only valid for Assignment
-	Assignment assignment;
-	try{
-		assignment = (Assignment)expression;
-	}catch(ClassCastException cce){
-		return resolveType(scope);
-	}
+public TypeBinding resolveType(BlockScope scope, Assignment assignment) {
 	MethodBinding mb2 = this.getMethodBindingForOverload(scope, new Expression [] {this.position, assignment.expression}, true);
 	if ((mb2 !=null) && (mb2.isValidBinding())) {
 		this.resolvedType = TypeBinding.VOID;
-		this.setExpectedType(this.resolvedType);
-		//Return value will be discarded if exist
-		/*if(mb2.returnType != TypeBinding.VOID)
-		scope.problemReporter().typeMismatchError(mb2.returnType, TypeBinding.VOID, this, null);*/
-		if(this.position.resolvedType == null)
-			this.position.resolveType(scope);
-		if(assignment.expression == null)
-			assignment.expression.resolveType(scope);
 		this.receiver.computeConversion(scope, this.receiver.resolvedType, this.receiver.resolvedType);
 		this.position.computeConversion(scope, mb2.parameters[0], this.position.resolvedType);
 		assignment.expression.computeConversion(scope, mb2.parameters[1], assignment.expression.resolvedType);
@@ -381,12 +368,14 @@ public TypeBinding resolveType(BlockScope scope, Expression expression) {
 		return this.resolvedType;
 	}
 
-	if(this.receiver == null || this.receiver.resolvedType == null){
+	if (this.receiver == null || this.receiver.resolvedType == null
+			|| this.position == null || this.position.resolvedType == null
+			|| assignment.expression == null || assignment.expression.resolvedType == null) {
 		return null;
 	}
-
 	if(!this.receiver.resolvedType.isArrayType()){
-		scope.problemReporter().referenceMustBeArrayTypeAt(this.receiver.resolvedType, this);
+		scope.problemReporter().invalidOrMissingOverloadedOperator(this, getMethodName(true),
+				this.position.resolvedType, assignment.expression.resolvedType);
 		return null;
 	}
 
@@ -408,22 +397,24 @@ public MethodBinding getMethodBindingForOverload(BlockScope scope, final Express
 	TypeBinding [] tb_right = new TypeBinding[types.length + arguments.length];
 	TypeBinding tb_left = null;
 
-	if(this.receiver.resolvedType == null)
+	if (!this.attemptedToResolveReceiver)
 		tb_left = this.receiver.resolveType(scope);
 	else
 		tb_left = this.receiver.resolvedType;
+	this.attemptedToResolveReceiver = true;
 	if (tb_left == null || tb_left.isArrayType()) {
 		return null;
 	}
 
 	boolean tbRightValid = true;
 	for(int i=0; i<arguments.length; i++){
-		if(arguments[i].resolvedType == null)
+		if (!this.attemptedToResolveArguments)
 			tb_right[i] = arguments[i].resolveType(scope);
 		else
 			tb_right[i] = arguments[i].resolvedType;
 		tbRightValid = tbRightValid && (tb_right[i] != null);
 	}
+	this.attemptedToResolveArguments = true;
 	for(int i=0; i<types.length; i++){
 		tb_right[arguments.length + i] = types[i];
 		tbRightValid = tbRightValid && (tb_right[arguments.length + i] != null);

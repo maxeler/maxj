@@ -20,12 +20,6 @@ public class ConnectCompoundAssignment extends Assignment implements OperatorIds
 	public int preAssignImplicitConversion;
 	public MethodBinding appropriateMethodForOverload = null;
 	public MethodBinding syntheticAccessor = null;
-	public TypeBinding expectedType = null;//Operator overload, for generic function call
-
-	@Override
-	public void setExpectedType(TypeBinding expectedType) {
-		this.expectedType = expectedType;
-	}
 
 	//  var op exp is equivalent to var = (varType) var op exp
 	// assignmentImplicitConversion stores the cast needed for the assignment

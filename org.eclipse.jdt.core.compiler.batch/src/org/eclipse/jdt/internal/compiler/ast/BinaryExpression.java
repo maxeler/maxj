@@ -48,12 +48,6 @@ public class BinaryExpression extends OperatorExpression {
 	public int overloadedExpresionSide = -1;
 	protected static final int overloadedLeftSide = 0;
 	protected static final int overloadedRightSide = 1;
-	public TypeBinding expectedType = null;//Operator overload, for generic function call
-
-	@Override
-	public void setExpectedType(TypeBinding expectedType) {
-		this.expectedType = expectedType;
-	}
 
 public BinaryExpression(Expression left, Expression right, int operator) {
 	this.left = left;
@@ -2100,19 +2094,8 @@ class BinaryExpressionSite extends OperatorOverloadInvocationSite {
 }
 
 public MethodBinding getMethodBindingForOverload(BlockScope scope) {
-	TypeBinding tb_right = null;
-	TypeBinding tb_left = null;
-
-	if(this.left.resolvedType == null)
-		tb_left = this.left.resolveType(scope);
-	else
-		tb_left = this.left.resolvedType;
-
-	if(this.right.resolvedType == null)
-		tb_right = this.right.resolveType(scope);
-	else
-		tb_right = this.right.resolvedType;
-
+	TypeBinding tb_right = this.right.resolvedType;
+	TypeBinding tb_left = this.left.resolvedType;
 	String ms = getMethodName();
 
 	//Object <op> Object
