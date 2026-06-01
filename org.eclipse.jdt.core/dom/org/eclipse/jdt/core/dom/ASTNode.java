@@ -1085,7 +1085,7 @@ public abstract class ASTNode {
 	 * Node type constant indicating a node of type
 	 * <code>IFStatement</code>.
 	 * @see IF_Statement
-	 * @since 3.42
+	 * @since 3.45
 	 */
 	public static final int _IF_STATEMENT = 200;
 
@@ -1093,7 +1093,7 @@ public abstract class ASTNode {
 	 * Node type constant indicating a node of type
 	 * <code>SWITCHStatement</code>.
 	 * @see SWITCH_Statement
-	 * @since 3.42
+	 * @since 3.45
 	 */
 	public static final int _SWITCH_STATEMENT = 201;
 
@@ -1101,7 +1101,7 @@ public abstract class ASTNode {
 	 * Node type constant indicating a node of type
 	 * <code>SWITCHCASE</code>.
 	 * @see SWITCH_CASE
-	 * @since 3.42
+	 * @since 3.45
 	 */
 	public static final int _SWITCH_CASE = 202;
 
