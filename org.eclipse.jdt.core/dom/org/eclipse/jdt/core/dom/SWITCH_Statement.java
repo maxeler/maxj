@@ -27,7 +27,7 @@ import java.util.List;
  * <code>SwitchCase</code> nodes are treated as a kind of
  * <code>Statement</code>.
  *
- * @since 3.42
+ * @since 3.46
  * @noinstantiate This class is not intended to be instantiated by clients.
  */
 @SuppressWarnings({"rawtypes", "unchecked"})

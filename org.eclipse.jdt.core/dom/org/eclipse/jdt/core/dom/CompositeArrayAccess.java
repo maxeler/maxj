@@ -22,7 +22,7 @@ import java.util.List;
  *    Expression <b>[</b> Expression <b>]</b>
  * </pre>
  *
- * @since 3.42
+ * @since 3.46
  * @noinstantiate This class is not intended to be instantiated by clients.
  */
 @SuppressWarnings("rawtypes")
