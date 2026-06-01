@@ -2902,7 +2902,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.45
+	 * @since 3.46
 	 */
     // NOTE:
 	// 80000 from messages.properties is chosen semi-arbitrary.
@@ -2917,7 +2917,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.45
+	 * @since 3.46
 	 */
     // NOTE:
 	// 80001 from messages.properties is chosen semi-arbitrary.
@@ -2932,7 +2932,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.45
+	 * @since 3.46
 	 */
     // NOTE:
 	// 80002 from messages.properties is chosen semi-arbitrary.
@@ -2947,7 +2947,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.45
+	 * @since 3.46
 	 */
     // NOTE:
 	// 80003 from messages.properties is chosen semi-arbitrary.
@@ -2963,7 +2963,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.45
+	 * @since 3.46
 	 */
     // NOTE:
 	// 80004 from messages.properties is chosen semi-arbitrary.
@@ -2975,7 +2975,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.45
+	 * @since 3.46
 	 */
     // NOTE:
 	// 80005 from messages.properties is chosen semi-arbitrary.
@@ -2989,7 +2989,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Overloaded operators
-	 * @since 3.45
+	 * @since 3.46
 	 */
     // NOTE:
 	// 80006 from messages.properties is chosen semi-arbitrary.
@@ -3014,7 +3014,7 @@ void setSourceStart(int sourceStart);
 
 	/**
 	 *  Using non void return type for overloaded put method
-	 * @since 3.45
+	 * @since 3.46
 	 */
     // NOTE:
 	// 80006 from messages.properties is chosen semi-arbitrary.

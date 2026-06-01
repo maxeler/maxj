@@ -342,6 +342,8 @@ static class JavacCompiler {
 			return JavaCore.VERSION_24;
 		} else if(rawVersion.startsWith("25")) {
 			return JavaCore.VERSION_25;
+		} else if(rawVersion.startsWith("26")) {
+			return JavaCore.VERSION_26;
 		} else {
 			throw new RuntimeException("unknown javac version: " + rawVersion);
 		}
@@ -589,6 +591,16 @@ static class JavacCompiler {
 		if (version == JavaCore.VERSION_25) {
 			switch(rawVersion) {
 				case "25-ea", "25-beta", "25":
+					return 0000;
+				case "25.0.1":
+					return 0100;
+				case "25.0.2":
+					return 0200;
+			}
+		}
+		if (version == JavaCore.VERSION_26) {
+			switch(rawVersion) {
+				case "26-ea", "26-beta", "26":
 					return 0000;
 			}
 		}
@@ -933,9 +945,6 @@ protected static class JavacTestOptions {
 				new EclipseHasABug(MismatchType.JavacErrorsEclipseWarnings),
 			EclipseBug421922 = // https://bugs.eclipse.org/bugs/show_bug.cgi?id=421922
 						new EclipseHasABug(MismatchType.EclipseErrorsJavacNone),
-			EclipseBug428061 = // https://bugs.eclipse.org/bugs/show_bug.cgi?id=428061
-								new EclipseHasABug(MismatchType.JavacErrorsEclipseNone |
-										MismatchType.JavacErrorsEclipseWarnings),
 			EclipseBug510528 = // https://bugs.eclipse.org/bugs/show_bug.cgi?id=510528
 				new EclipseHasABug(MismatchType.JavacErrorsEclipseNone),
 			EclipseBug531531 = // https://bugs.eclipse.org/bugs/show_bug.cgi?id=531531

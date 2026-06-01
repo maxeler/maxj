@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2025 IBM Corporation and others.
+ * Copyright (c) 2000, 2026 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -262,6 +262,7 @@ public class CompilerOptions {
 	public static final String VERSION_23 = "23"; //$NON-NLS-1$
 	public static final String VERSION_24 = "24"; //$NON-NLS-1$
 	public static final String VERSION_25 = "25"; //$NON-NLS-1$
+	public static final String VERSION_26 = "26"; //$NON-NLS-1$
 	/*
 	 * Note: Whenever a new version is added, make sure getLatestVersion()
 	 * is updated with it.
@@ -408,8 +409,9 @@ public class CompilerOptions {
 	public static final int IncompatibleOwningContract = IrritantSet.GROUP3 | ASTNode.Bit2;
 	public static final int UnusedLambdaParameter = IrritantSet.GROUP3 | ASTNode.Bit3;
 	public static final int MemberOfDeprecatedType = IrritantSet.GROUP3 | ASTNode.Bit4;
+	public static final int NullAnnotationUnsupportedLocation = IrritantSet.GROUP3 | ASTNode.Bit5;
 
-	public static final int MaxelerOverloadedPut = IrritantSet.GROUP3 | ASTNode.Bit5;
+	public static final int MaxelerOverloadedPut = IrritantSet.GROUP3 | ASTNode.Bit6;
 	//public static final int MaxelerAssertStatement = IrritantSet.GROUP3 | ASTNode.Bit5;
 
 
@@ -690,7 +692,7 @@ public class CompilerOptions {
 	 * Return the latest Java language version supported by the Eclipse compiler
 	 */
 	public static String getLatestVersion() {
-		return VERSION_25;
+		return VERSION_26;
 	}
 	/**
 	 * Return the most specific option key controlling this irritant. Note that in some case, some irritant is controlled by
@@ -1227,6 +1229,7 @@ public class CompilerOptions {
 			case PessimisticNullAnalysisForFreeTypeVariables:
 			case NonNullTypeVariableFromLegacyInvocation:
 			case AnnotatedTypeArgumentToUnannotated:
+			case NullAnnotationUnsupportedLocation:
 				return "null"; //$NON-NLS-1$
 			case FallthroughCase :
 				return "fallthrough"; //$NON-NLS-1$

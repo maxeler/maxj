@@ -285,7 +285,7 @@ public class ASTMatcher {
 	 * @return <code>true</code> if the subtree matches, or
 	 *   <code>false</code> if they do not match or the other object has a
 	 *   different node type or is <code>null</code>
-	 * @since 3.45
+	 * @since 3.46
 	 */
 	public boolean match(CompositeArrayAccess node, Object other) {
 		if (!(other instanceof CompositeArrayAccess)) {
@@ -1148,7 +1148,7 @@ public class ASTMatcher {
 	 * @return <code>true</code> if the subtree matches, or
 	 *   <code>false</code> if they do not match or the other object has a
 	 *   different node type or is <code>null</code>
-	 * @since 3.45
+	 * @since 3.46
 	 */
 	public boolean match(IF_Statement node, Object other) {
 		if (!(other instanceof IF_Statement)) {
@@ -2594,7 +2594,7 @@ public class ASTMatcher {
 	 * @return <code>true</code> if the subtree matches, or
 	 *   <code>false</code> if they do not match or the other object has a
 	 *   different node type or is <code>null</code>
-	 * @since 3.45
+	 * @since 3.46
 	 */
 	public boolean match(SWITCH_CASE node, Object other) {
 		if (!(other instanceof SWITCH_CASE)) {
@@ -2675,7 +2675,7 @@ public class ASTMatcher {
 	 * @return <code>true</code> if the subtree matches, or
 	 *   <code>false</code> if they do not match or the other object has a
 	 *   different node type or is <code>null</code>
-	 * @since 3.45
+	 * @since 3.46
 	 */
 	public boolean match(SWITCH_Statement node, Object other) {
 		if (!(other instanceof SWITCH_Statement)) {

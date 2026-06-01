@@ -9870,4 +9870,172 @@ public class SwitchPatternTest extends AbstractRegressionTest9 {
 			"A null case label has to be either the only expression in a case label or the first expression followed only by a default\n" +
 			"----------\n");
 	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/5000
+	// Switch guards are not respected when record has no components
+	public void testIssue5000() throws Exception {
+		runConformTest(
+			new String[] {
+				"X.java",
+				"""
+				sealed interface Union {
+					record Foo() implements Union {
+					}
+
+					record Bar() implements Union {
+					}
+				}
+
+				public class X {
+					public static void main(String[] args) {
+						Union foo = new Union.Foo();
+
+						var f = switch (foo) {
+							case Union.Foo() when "".equals("abc") -> {
+								yield "bad";
+							}
+							case Union.Foo() -> {
+								yield "good";
+							}
+							case Union.Bar() -> {
+								yield "bar";
+							}
+						};
+
+						System.out.println(f);
+					}
+				}
+				"""
+			},
+			"good");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/5000
+	// Switch guards are not respected when record has no components
+	public void testIssue5000_2() throws Exception {
+		runConformTest(
+			new String[] {
+				"X.java",
+				"""
+				sealed interface Union {
+					record Foo() implements Union {
+					}
+
+					record Bar() implements Union {
+					}
+				}
+
+				public class X {
+					public static void main(String[] args) {
+						Union foo = new Union.Foo();
+
+						var f = switch (foo) {
+							case Union.Foo() when "abc".equals("abc") -> {
+								yield "bad";
+							}
+							case Union.Foo() -> {
+								yield "good";
+							}
+							case Union.Bar() -> {
+								yield "bar";
+							}
+						};
+
+						System.out.println(f);
+					}
+				}
+				"""
+			},
+			"bad");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/5081
+	// NPE in IGenerateTypeCheck.generateTypeCheck with record patterns in switch expression inside lambda
+	public void testIssue5081() {
+		if (this.complianceLevel < ClassFileConstants.JDK22)
+			return;
+		runConformTest(
+			new String[] {
+				"X.java",
+				"""
+				import java.util.function.Function;
+				import java.util.function.Predicate;
+
+				public class X {
+
+					sealed interface Result<T> permits Valid, ValidWarning, InvalidWarning, InvalidError {}
+					record Valid<T>(T value) implements Result<T> {}
+					record ValidWarning<T>(T value, String warning) implements Result<T> {}
+					record InvalidWarning<T>(String warning) implements Result<T> {}
+					record InvalidError<T>(String error) implements Result<T> {}
+
+					public <Item, Res> Predicate<Item> filter(Function<Item, Result<Res>> validator) {
+						return item -> {
+							var validation = validator.apply(item);
+							return switch (validation) {
+								case Valid<?> _ -> true;
+								case ValidWarning<?>(_, var warning) -> {
+									System.out.println(warning);
+									yield true;
+								}
+								case InvalidWarning<?>(var warning) -> {
+									System.out.println(warning);
+									yield false;
+								}
+								case InvalidError<?>(var error) -> {
+									System.out.println(error);
+									yield false;
+								}
+							};
+						};
+					}
+				}
+				"""
+			});
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/5081
+	// NPE in IGenerateTypeCheck.generateTypeCheck with record patterns in switch expression inside lambda
+	public void testIssue5081_2() {
+		if (this.complianceLevel < ClassFileConstants.JDK22)
+			return;
+		runConformTest(
+			new String[] {
+				"X.java",
+				"""
+				import java.util.function.Function;
+				import java.util.function.Predicate;
+
+				public class X {
+
+					sealed interface Result<T> permits Valid, ValidWarning, InvalidWarning, InvalidError {}
+					record Valid<T>(T value) implements Result<T> {}
+					record ValidWarning<T>(T value, String warning) implements Result<T> {}
+					record InvalidWarning<T>(String warning) implements Result<T> {}
+					record InvalidError<T>(String error) implements Result<T> {}
+
+					public <Item, Res> Predicate<Item> filter(Function<Item, Result<Res>> validator) {
+						return item -> {
+							var validation = validator.apply(item);
+							return switch (validation) {
+								case Valid<?> _ -> true;
+								case ValidWarning<?>(var _, var warning) -> {
+									System.out.println(warning);
+									yield true;
+								}
+								case InvalidWarning<?>(var warning) -> {
+									System.out.println(warning);
+									yield false;
+								}
+								case InvalidError<?>(var error) -> {
+									System.out.println(error);
+									yield false;
+								}
+							};
+						};
+					}
+				}
+				"""
+			});
+	}
 }

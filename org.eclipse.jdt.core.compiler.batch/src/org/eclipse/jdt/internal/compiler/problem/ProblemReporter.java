@@ -81,6 +81,7 @@
 package org.eclipse.jdt.internal.compiler.problem;
 
 import java.io.CharConversionException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -407,6 +408,11 @@ public static int getIrritant(int problemID) {
 		case IProblem.IllegalParameterNullityRedefinition:
 		case IProblem.RecordComponentIncompatibleNullnessVsInheritedAccessor:
 			return CompilerOptions.NullSpecViolation;
+
+		case IProblem.NullAnnotationUnsupportedLocation:
+		case IProblem.NullAnnotationAtQualifyingType:
+		case IProblem.NullAnnotationUnsupportedLocationAtType:
+			return CompilerOptions.NullAnnotationUnsupportedLocation;
 
 		case IProblem.NullNotCompatibleToFreeTypeVariable:
 		case IProblem.NullityMismatchAgainstFreeTypeVariable:
@@ -2548,7 +2554,7 @@ public void forbiddenReference(FieldBinding field, ASTNode location,
 	this.handle(
 		problemId,
 		new String[] { new String(field.readableName()) }, // distinct from msg arg for quickfix purpose
-		getElaborationId(IProblem.ForbiddenReference, (byte) (FIELD_ACCESS | classpathEntryType)),
+		getElaborationId(problemId, (byte) (FIELD_ACCESS | classpathEntryType)),
 		new String[] {
 			classpathEntryName,
 			new String(field.shortReadableName()),
@@ -2567,7 +2573,7 @@ public void forbiddenReference(MethodBinding method, InvocationSite location,
 		this.handle(
 			problemId,
 			new String[] { new String(method.readableName()) }, // distinct from msg arg for quickfix purpose
-			getElaborationId(IProblem.ForbiddenReference, (byte) (CONSTRUCTOR_ACCESS | classpathEntryType)),
+			getElaborationId(problemId, (byte) (CONSTRUCTOR_ACCESS | classpathEntryType)),
 			new String[] {
 				classpathEntryName,
 				new String(method.shortReadableName())},
@@ -2578,7 +2584,7 @@ public void forbiddenReference(MethodBinding method, InvocationSite location,
 		this.handle(
 			problemId,
 			new String[] { new String(method.readableName()) }, // distinct from msg arg for quickfix purpose
-			getElaborationId(IProblem.ForbiddenReference, (byte) (METHOD_ACCESS | classpathEntryType)),
+			getElaborationId(problemId, (byte) (METHOD_ACCESS | classpathEntryType)),
 			new String[] {
 				classpathEntryName,
 				new String(method.shortReadableName()),
@@ -2597,7 +2603,7 @@ public void forbiddenReference(TypeBinding type, ASTNode location,
 	this.handle(
 		problemId,
 		new String[] { new String(type.readableName()) }, // distinct from msg arg for quickfix purpose
-		getElaborationId(IProblem.ForbiddenReference, /* TYPE_ACCESS | */ classpathEntryType), // TYPE_ACCESS values to 0
+		getElaborationId(problemId, /* TYPE_ACCESS | */ classpathEntryType), // TYPE_ACCESS values to 0
 		new String[] {
 			classpathEntryName,
 			new String(type.shortReadableName())},
@@ -6459,7 +6465,7 @@ public void nullAnnotationUnsupportedLocation(Annotation annotation) {
 	String[] shortArguments = new String[] {
 		String.valueOf(annotation.resolvedType.shortReadableName())
 	};
-	int severity = ProblemSeverities.Error | ProblemSeverities.Fatal;
+	int severity = ProblemSeverities.Error;
 	if (annotation.recipient instanceof ReferenceBinding) {
 		if (((ReferenceBinding) annotation.recipient).isAnnotationType())
 			severity = ProblemSeverities.Warning; // special case for https://bugs.eclipse.org/461878
@@ -6476,7 +6482,7 @@ public void nullAnnotationAtQualifyingType(Annotation annotation) {
 	String[] shortArguments = new String[] {
 		String.valueOf(annotation.resolvedType.shortReadableName())
 	};
-	int severity = ProblemSeverities.Error | ProblemSeverities.Fatal;
+	int severity = ProblemSeverities.Error;
 	handle(IProblem.NullAnnotationAtQualifyingType,
 			arguments, shortArguments,
 			severity,
@@ -6500,7 +6506,7 @@ public void nullAnnotationUnsupportedLocation(TypeReference type) {
 	}
 
 	handle(IProblem.NullAnnotationUnsupportedLocationAtType,
-		NoArgument, NoArgument, type.sourceStart, sourceEnd);
+		NoArgument, NoArgument, ProblemSeverities.Error, type.sourceStart, sourceEnd);
 }
 private char[][] missingAnalysisAnnotationName(AnnotationBinding[] annotations, LookupEnvironment environment) {
 	for (AnnotationBinding annotationBinding : annotations) {
@@ -10350,7 +10356,7 @@ public void anonymousDiamondWithNonDenotableTypeArguments(TypeReference type, Ty
 			type.sourceStart,
 			type.sourceEnd);
 }
-public void redundantSpecificationOfTypeArguments(ASTNode location, TypeBinding[] argumentTypes) {
+public void redundantSpecificationOfTypeArguments(TypeReference location, TypeBinding[] argumentTypes) {
 	int severity = computeSeverity(IProblem.RedundantSpecificationOfTypeArguments);
 	if (severity != ProblemSeverities.Ignore) {
 		int sourceStart = -1;
@@ -10360,10 +10366,36 @@ public void redundantSpecificationOfTypeArguments(ASTNode location, TypeBinding[
 		} else {
 			sourceStart = location.sourceStart;
 		}
+		String problemArguments;
+		String messageArguments;
+		class FindWildcard extends TypeBindingVisitor {
+			boolean found;
+			@Override
+			public boolean visit(WildcardBinding wildcardBinding) {
+				this.found = true;
+				return false;
+			}
+		}
+		FindWildcard find = new FindWildcard();
+		TypeBindingVisitor.visit(find, argumentTypes);
+		TypeReference[] typeArguments = null;
+		if (find.found) {
+			// when wildcards are in the mix then prefer showing type references, rather than processed bindings:
+			if (location instanceof ParameterizedSingleTypeReference pstr)
+				typeArguments = pstr.typeArguments;
+			else if (location instanceof ParameterizedQualifiedTypeReference pqtr)
+				typeArguments = pqtr.typeArguments[pqtr.typeArguments.length-1];
+		}
+		if (typeArguments != null) {
+			problemArguments = messageArguments = Arrays.stream(typeArguments).map(TypeReference::toString).collect(Collectors.joining(", ")); //$NON-NLS-1$
+		} else {
+			problemArguments = typesAsString(argumentTypes, false);
+			messageArguments = typesAsString(argumentTypes, true);
+		}
 		this.handle(
 			IProblem.RedundantSpecificationOfTypeArguments,
-			new String[] {typesAsString(argumentTypes, false)},
-			new String[] {typesAsString(argumentTypes, true)},
+			new String[] {problemArguments},
+			new String[] {messageArguments},
 			severity,
 			sourceStart,
 			location.sourceEnd);
