@@ -24,7 +24,7 @@ public class MaxjTask extends Task{
 		= "Compile failed; see the compiler error output for details.";  //$NON-NLS-1$
 
 		private final static String EMPTY_STRING = ""; //$NON-NLS-1$
-		private final static String JAVA_VERSION = "21"; //$NON-NLS-1$
+		private static final String JAVA_VERSION = CompilerOptions.VERSION_25;
 
 		private boolean debug;
 		private String debugLevel;
